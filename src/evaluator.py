@@ -78,7 +78,11 @@ class Evaluator:
                 obs = next_obs
 
                 ep_rewards.append(rewards.item())
-                ep_successes.append(infos.get('is_success', False).item())
+                # ep_successes.append(infos.get('is_success', False).item())
+
+                if "final_info" in infos:
+                    for info in infos["final_info"]:
+                        ep_successes.append(info.get('is_success', False))
 
             eval_returns.append(np.sum(ep_rewards))
             eval_successes.append(np.sum(ep_successes))
