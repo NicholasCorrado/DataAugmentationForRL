@@ -83,7 +83,7 @@ class Args:
     """probability of sampling a random action"""
     def __post_init__(self):
 
-        self.save_dir = f"{self.save_rootdir}/{self.env_id}/ddpg2/{self.save_subdir}"
+        self.save_dir = f"{self.save_rootdir}/{self.env_id}/ddpg/{self.save_subdir}"
         if self.run_id is None:
             self.run_id = get_latest_run_id(save_dir=self.save_dir) + 1
         self.save_dir += f"/run_{self.run_id}"
