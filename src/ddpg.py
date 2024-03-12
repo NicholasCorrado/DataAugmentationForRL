@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 import gymnasium as gym
+import panda_gym
 import numpy as np
 import torch
 import torch.nn as nn
@@ -38,12 +39,14 @@ class Args:
     """if toggled, `torch.backends.cudnn.deterministic=False`"""
     cuda: bool = True
     """if toggled, cuda will be enabled by default"""
-    env_id: str = "Hopper-v4"
+    env_id: str = "PandaPush-v3"
     """the environment id of the Atari game"""
-    total_timesteps: int = 50000
+    total_timesteps: int = int(1e6)
     """total timesteps of the experiments"""
     eval_freq: int = 10000
     """number of timesteps between policy evaluations"""
+    n_eval_episodes: int = 50
+    """number of eval episodes"""
     seed: Optional[int] = None
     """seed of the experiment"""
     run_id: Optional[int] = None
@@ -76,10 +79,11 @@ class Args:
     """the frequency of training policy (delayed)"""
     noise_clip: float = 0.5
     """noise clip parameter of the Target Policy Smoothing Regularization"""
-
+    random_action_prob: float = 0.0
+    """probability of sampling a random action"""
     def __post_init__(self):
 
-        self.save_dir = f"{self.save_rootdir}/{self.env_id}/ddpg2/{self.save_subdir}"
+        self.save_dir = f"{self.save_rootdir}/{self.env_id}/ddpg/{self.save_subdir}"
         if self.run_id is None:
             self.run_id = get_latest_run_id(save_dir=self.save_dir) + 1
         self.save_dir += f"/run_{self.run_id}"
@@ -102,6 +106,9 @@ def make_env(env_id, seed, idx, capture_video, run_name):
             env = gym.wrappers.RecordVideo(env, f"videos/{run_name}")
         else:
             env = gym.make(env_id)
+        # Flatten Dict obs so we don't need to handle them a special case in DA
+        if isinstance(env.observation_space, gym.spaces.Dict):
+            env = gym.wrappers.FlattenObservation(env)
         env = gym.wrappers.RecordEpisodeStatistics(env)
         env.action_space.seed(seed)
         return env
@@ -208,7 +215,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
     # @TODO: Initialize empty replay buffer for augmented data
 
     eval_env = gym.vector.SyncVectorEnv([make_env(args.env_id, 0, 0, False, run_name)])
-    evaluator = Evaluator(actor, eval_env, args.save_dir)
+    evaluator = Evaluator(actor, eval_env, args.save_dir, n_eval_episodes=args.n_eval_episodes)
 
     start_time = time.time()
 
@@ -216,7 +223,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
     obs, _ = envs.reset(seed=args.seed)
     for global_step in range(args.total_timesteps):
         # ALGO LOGIC: put action logic here
-        if global_step < args.learning_starts:
+        if global_step < args.learning_starts and np.random.random() < args.random_action_prob:
             actions = np.array([envs.single_action_space.sample() for _ in range(envs.num_envs)])
         else:
             with torch.no_grad():

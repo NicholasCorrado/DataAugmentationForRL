@@ -38,8 +38,8 @@ class BaseDAF:
         aug_next_obs = np.tile(next_obs, (aug_ratio, 1))
         aug_action = np.tile(action, (aug_ratio, 1))
         aug_reward = np.tile(reward, (aug_ratio, 1))
-        aug_terminated = np.tile(terminated, (aug_ratio, 1)).astype(np.bool)
-        aug_truncated = np.tile(truncated, (aug_ratio, 1)).astype(np.bool)
+        aug_terminated = np.tile(terminated, (aug_ratio, 1)).astype(bool)
+        aug_truncated = np.tile(truncated, (aug_ratio, 1)).astype(bool)
         aug_infos = np.tile([infos], (aug_ratio, 1))
 
         return aug_obs, aug_next_obs, aug_action, aug_reward, aug_terminated, aug_truncated, aug_infos
