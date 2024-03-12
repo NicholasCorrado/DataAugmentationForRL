@@ -20,6 +20,8 @@ from torch.utils.tensorboard import SummaryWriter
 from src.utils import get_latest_run_id
 from src.evaluator import Evaluator
 
+from dafs import DAFS
+
 @dataclass
 class Args:
     # wandb tracking
@@ -45,7 +47,7 @@ class Args:
     """total timesteps of the experiments"""
     eval_freq: int = 10000
     """number of timesteps between policy evaluations"""
-    n_eval_episodes: int = 50
+    n_eval_episodes: int = 100
     """number of eval episodes"""
     seed: Optional[int] = None
     """seed of the experiment"""
@@ -61,7 +63,7 @@ class Args:
     """whether to save model into the `runs/{run_name}` folder"""
 
     # Algorithm specific arguments
-    learning_rate: float = 3e-4
+    learning_rate: float = 1e-3
     """the learning rate of the optimizer"""
     buffer_size: int = int(1e6)
     """the replay memory buffer size"""
@@ -79,7 +81,7 @@ class Args:
     """the frequency of training policy (delayed)"""
     noise_clip: float = 0.5
     """noise clip parameter of the Target Policy Smoothing Regularization"""
-    random_action_prob: float = 0.0
+    random_action_prob: float = 0.3
     """probability of sampling a random action"""
     def __post_init__(self):
 
@@ -213,6 +215,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         handle_timeout_termination=False,
     )
     # @TODO: Initialize empty replay buffer for augmented data
+    # @TODO: Instantiate DAF (fetch the DAF class from DAFS[args.env_id])
 
     eval_env = gym.vector.SyncVectorEnv([make_env(args.env_id, 0, 0, False, run_name)])
     evaluator = Evaluator(actor, eval_env, args.save_dir, n_eval_episodes=args.n_eval_episodes)
