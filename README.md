@@ -5,6 +5,7 @@ cd WeakDataAugmentation
 pip install -e .
 cd src
 pip install -e custom_envs
+pip install pandagym
 ... # pip install pacakge dependencies
 ```
 

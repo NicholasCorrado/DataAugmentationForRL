@@ -65,9 +65,7 @@ class Evaluator:
             ep_rewards = []
             ep_successes = []
             done = False
-            step = 0
             while not done:
-                step += 1
                 # ALGO LOGIC: put action logic here
                 with torch.no_grad():
                     actions = self.actor(torch.Tensor(obs).to(self.device))
@@ -80,8 +78,7 @@ class Evaluator:
                 obs = next_obs
 
                 ep_rewards.append(rewards.item())
-                ep_successes.append(infos.get('is_success', False)
-)
+                ep_successes.append(infos.get('is_success', False).item())
 
             eval_returns.append(np.sum(ep_rewards))
             eval_successes.append(np.sum(ep_successes))
