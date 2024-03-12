@@ -1,12 +1,7 @@
 from typing import Dict, List, Any
 
 import numpy as np
-import gymnasium as gym
-import panda_gym
 from gymnasium.vector import SyncVectorEnv
-from gymnasium.wrappers import FlattenObservation
-
-import src.dafs.panda_push
 from src.dafs.base_daf import BaseDAF
 
 class RelabelGoalBase(BaseDAF):

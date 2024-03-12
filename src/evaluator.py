@@ -60,8 +60,8 @@ class Evaluator:
         eval_returns = []
         eval_successes = []
 
-        obs, _ = self.eval_env.reset()
         for episode_i in range(self.n_eval_episodes):
+            obs, _ = self.eval_env.reset()
             ep_rewards = []
             ep_successes = []
             done = False
