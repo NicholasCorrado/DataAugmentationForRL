@@ -79,7 +79,8 @@ class Args:
     """the frequency of training policy (delayed)"""
     noise_clip: float = 0.5
     """noise clip parameter of the Target Policy Smoothing Regularization"""
-
+    random_action_prob: float = 0.0
+    """probability of sampling a random action"""
     def __post_init__(self):
 
         self.save_dir = f"{self.save_rootdir}/{self.env_id}/ddpg2/{self.save_subdir}"
@@ -222,7 +223,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
     obs, _ = envs.reset(seed=args.seed)
     for global_step in range(args.total_timesteps):
         # ALGO LOGIC: put action logic here
-        if global_step < args.learning_starts:
+        if global_step < args.learning_starts and np.random.random() < args.random_action_prob:
             actions = np.array([envs.single_action_space.sample() for _ in range(envs.num_envs)])
         else:
             with torch.no_grad():
