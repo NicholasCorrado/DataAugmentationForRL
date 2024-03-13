@@ -1,5 +1,5 @@
 import numpy as np
-import  gym
+import gym
 from base_daf import BaseDAF
 from typing import Dict, List, Any
 import custom_envs
@@ -36,13 +36,13 @@ class TranslateAgent(BaseDAF):
         next_obs[:, 1] = new_pos_y + delta_y
         
         # vector of distances from goal
-        dist_from_goal = np.linalg.norm(next_obs[:, 0:2] - next_obs[:, 3:5]) 
+        dist_from_goal = np.linalg.norm(next_obs[:, 0:2] - next_obs[:, 3:5])
 
         # vector of bool at_goal true/false
-        terminated = dist_from_goal < 0.05
+        terminated[:] = dist_from_goal < 0.05
         
         # masking where reward=1 if terminated, -0.1 else
-        reward[terminated] = 0 
+        reward[terminated] = +1.0
         reward[~terminated] = -0.1
 
         # validat
@@ -70,7 +70,7 @@ def check_valid(env, obs, next_obs, action, reward, terminated, truncated, info)
 
     # Set the environment state to match the input observation. Below is a template for how you would do this for a
     # MuJoCo task.
-    env.set_state((obs[0:2]), obs[2:4]) # obs[-2:]
+    env.set_state((obs[0:2]).copy(), obs[2:4].copy()) # obs[-2:]
 
     # determine ture next_obs, reward
     true_next_obs, true_reward, true_terminated, true_truncated, true_info = env.step(action)
@@ -78,7 +78,7 @@ def check_valid(env, obs, next_obs, action, reward, terminated, truncated, info)
     if not np.allclose(next_obs, true_next_obs):
         print('Dynamics do not match:', next_obs-true_next_obs)
     if not np.allclose(reward, true_reward):
-        print('Rewards do not match: reward %d, true_reward %d' % (reward, true_reward))
+        print('Rewards do not match: reward %f, true_reward %f' % (reward, true_reward))
     if not np.allclose(terminated, true_terminated):
         print('Termination signals do not match:', terminated, true_terminated)
 
