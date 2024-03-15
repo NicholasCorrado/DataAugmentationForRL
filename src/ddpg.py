@@ -88,6 +88,11 @@ class Args:
     """noise clip parameter of the Target Policy Smoothing Regularization"""
     random_action_prob: float = 0.0
     """probability of sampling a random action"""
+
+    # DA hyperparams
+    alpha: float = 0.50
+    aug_ratio: int = 1 
+
     def __post_init__(self):
 
         self.save_dir = f"{self.save_rootdir}/{self.env_id}/ddpg/{self.save_subdir}"
