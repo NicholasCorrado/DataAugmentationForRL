@@ -1,9 +1,11 @@
 import numpy as np
 import gym
-from base_daf import BaseDAF
+from src.dafs.base_daf import BaseDAF
 from typing import Dict, List, Any
-import custom_envs
+# import custom_envs
 
+# import sys
+# sys.path.append("../")
 
 class TranslateAgent(BaseDAF):
     def __init__(self, env=None, **kwargs):
@@ -82,6 +84,7 @@ def check_valid(env, obs, next_obs, action, reward, terminated, truncated, info)
     if not np.allclose(terminated, true_terminated):
         print('Termination signals do not match:', terminated, true_terminated)
 
+
 if __name__ == "__main__":
     env_id = 'Nav2d-v0'
     env = gym.make(env_id)
@@ -106,3 +109,4 @@ if __name__ == "__main__":
                     terminated=aug_terminated[0],
                     truncated=aug_truncated[0],
                     info=aug_infos[0])
+        

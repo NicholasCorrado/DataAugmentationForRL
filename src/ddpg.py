@@ -6,7 +6,12 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 import gymnasium as gym
+# import gym
 import panda_gym
+import custom_envs
+from custom_envs.nav2d import Nav2dEnv
+from src.dafs.panda.push import RelabelGoal
+
 import numpy as np
 import torch
 import torch.nn as nn
@@ -20,7 +25,7 @@ from torch.utils.tensorboard import SummaryWriter
 from src.utils import get_latest_run_id
 from src.evaluator import Evaluator
 
-from dafs.nav2d import TranslateAgent
+from src.dafs.nav2d import TranslateAgent
 
 @dataclass
 class Args:
@@ -41,7 +46,7 @@ class Args:
     """if toggled, `torch.backends.cudnn.deterministic=False`"""
     cuda: bool = True
     """if toggled, cuda will be enabled by default"""
-    env_id: str = "PandaPush-v3"
+    env_id: str = "PandaPush-v3" # 
     """the environment id of the Atari game"""
     total_timesteps: int = int(1e6)
     """total timesteps of the experiments"""
@@ -105,9 +110,12 @@ def make_env(env_id, seed, idx, capture_video, run_name):
     def thunk():
         if capture_video and idx == 0:
             env = gym.make(env_id, render_mode="rgb_array")
+            # env = Nav2dEnv()
             env = gym.wrappers.RecordVideo(env, f"videos/{run_name}")
         else:
             env = gym.make(env_id)
+            # env = Nav2dEnv()
+
         # Flatten Dict obs so we don't need to handle them a special case in DA
         if isinstance(env.observation_space, gym.spaces.Dict):
             env = gym.wrappers.FlattenObservation(env)
@@ -190,7 +198,8 @@ poetry run pip install "stable_baselines3==2.0.0a1"
     torch.manual_seed(args.seed)
     torch.backends.cudnn.deterministic = args.torch_deterministic
 
-    device = torch.device("cuda" if torch.cuda.is_available() and args.cuda else "cpu")
+    # device = torch.device("cuda" if torch.cuda.is_available() and args.cuda else "cpu")
+    device = torch.device("cpu")
 
     # env setup
     envs = gym.vector.SyncVectorEnv([make_env(args.env_id, args.seed, 0, args.capture_video, run_name)])
@@ -216,6 +225,8 @@ poetry run pip install "stable_baselines3==2.0.0a1"
     )
     
     # @TODO: Initialize empty replay buffer for augmented data
+    aug_func = RelabelGoal(env=envs.envs[0])
+
     aug_rb = ReplayBuffer(
         args.buffer_size,
         envs.single_observation_space,
@@ -241,6 +252,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 actions += torch.normal(0, actor.action_scale * args.exploration_noise)
                 actions = actions.cpu().numpy().clip(envs.single_action_space.low, envs.single_action_space.high)
 
+        # print("actions ", actions)
         # TRY NOT TO MODIFY: execute the game and log data.
         next_obs, rewards, terminations, truncations, infos = envs.step(actions)
 
@@ -260,10 +272,10 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         
         ###############
         # @TODO: sample m augmented samples from a given DAF and append it to the augmented replay buffer
-        aug_func = TranslateAgent(env=envs)
-
+        # aug_func = TranslateAgent(env=envs)
+        
         aug_obs, aug_next_obs, aug_action, aug_reward, aug_terminated, aug_truncated, aug_infos = aug_func.augment(
-            obs, real_next_obs, actions, rewards, terminations, infos)
+            obs, real_next_obs, actions, rewards, terminations, truncations, infos)
 
         aug_rb.add(aug_obs, aug_next_obs, aug_action, aug_reward, aug_terminated, aug_infos) # doesn't need truncated?
         ##############
@@ -275,8 +287,8 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         if global_step > args.learning_starts:
             # @TODO: For a given alpha \in [0, 1] sample (1-alpha)*batch_size samples from the observed replay buffer and
             # alpha*batch_size samples from the augmented replay buffer.
-            data = rb.sample((1-alpha) * args.batch_size)
-            data += aug_rb.sample(alpha * args.batch_size)
+            data = rb.sample(args.batch_size)
+            # data += aug_rb.sample(alpha * args.batch_size)
             with torch.no_grad():
                 next_state_actions = target_actor(data.next_observations)
                 qf1_next_target = qf1_target(data.next_observations, next_state_actions)

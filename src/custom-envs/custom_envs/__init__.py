@@ -1,4 +1,6 @@
 import os
+import gymnasium as gym
+
 from gym.envs.registration import register
 
 # ENVS_DIR = os.path.join(os.path.dirname(__file__), 'envs')
