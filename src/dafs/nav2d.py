@@ -36,7 +36,7 @@ class TranslateAgent(BaseDAF):
         next_obs[:, 1] = new_pos_y + delta_y
         
         # vector of distances from goal
-        dist_from_goal = np.linalg.norm(next_obs[:, 0:2] - next_obs[:, 3:5])
+        dist_from_goal = np.linalg.norm(next_obs[:, 0:2] - next_obs[:, 2:4])
 
         # vector of bool at_goal true/false
         terminated[:] = dist_from_goal < 0.05
