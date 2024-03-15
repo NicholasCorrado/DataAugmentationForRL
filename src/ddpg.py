@@ -20,6 +20,8 @@ from torch.utils.tensorboard import SummaryWriter
 from src.utils import get_latest_run_id
 from src.evaluator import Evaluator
 
+from dafs.nav2d import TranslateAgent
+
 @dataclass
 class Args:
     # wandb tracking
@@ -212,7 +214,15 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         # Since we're using gymnasium, we'll use the `terminated` flag to handle timeout vs termination.
         handle_timeout_termination=False,
     )
+    
     # @TODO: Initialize empty replay buffer for augmented data
+    aug_rb = ReplayBuffer(
+        args.buffer_size,
+        envs.single_observation_space,
+        envs.single_action_space,
+        device,
+        handle_timeout_termination=False,
+    )
 
     eval_env = gym.vector.SyncVectorEnv([make_env(args.env_id, 0, 0, False, run_name)])
     evaluator = Evaluator(actor, eval_env, args.save_dir, n_eval_episodes=args.n_eval_episodes)
@@ -247,17 +257,26 @@ poetry run pip install "stable_baselines3==2.0.0a1"
             if trunc:
                 real_next_obs[idx] = infos["final_observation"][idx]
         rb.add(obs, real_next_obs, actions, rewards, terminations, infos)
-
+        
+        ###############
         # @TODO: sample m augmented samples from a given DAF and append it to the augmented replay buffer
+        aug_func = TranslateAgent(env=envs)
 
+        aug_obs, aug_next_obs, aug_action, aug_reward, aug_terminated, aug_truncated, aug_infos = aug_func.augment(
+            obs, real_next_obs, actions, rewards, terminations, infos)
+
+        aug_rb.add(aug_obs, aug_next_obs, aug_action, aug_reward, aug_terminated, aug_infos) # doesn't need truncated?
+        ##############
         # TRY NOT TO MODIFY: CRUCIAL step easy to overlook
         obs = next_obs
 
         # ALGO LOGIC: training.
+        alpha = 0.5 
         if global_step > args.learning_starts:
             # @TODO: For a given alpha \in [0, 1] sample (1-alpha)*batch_size samples from the observed replay buffer and
             # alpha*batch_size samples from the augmented replay buffer.
-            data = rb.sample(args.batch_size)
+            data = rb.sample((1-alpha) * args.batch_size)
+            data += aug_rb.sample(alpha * args.batch_size)
             with torch.no_grad():
                 next_state_actions = target_actor(data.next_observations)
                 qf1_next_target = qf1_target(data.next_observations, next_state_actions)
