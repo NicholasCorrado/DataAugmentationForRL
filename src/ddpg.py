@@ -6,11 +6,9 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 import gymnasium as gym
-# import gym
 import panda_gym
 import custom_envs
-from custom_envs.nav2d import Nav2dEnv
-from src.dafs.panda.push import RelabelGoal
+from src.dafs import DAFS
 
 import numpy as np
 import torch
@@ -24,8 +22,6 @@ from torch.utils.tensorboard import SummaryWriter
 
 from src.utils import get_latest_run_id
 from src.evaluator import Evaluator
-
-from src.dafs.nav2d import TranslateAgent
 
 @dataclass
 class Args:
@@ -46,7 +42,7 @@ class Args:
     """if toggled, `torch.backends.cudnn.deterministic=False`"""
     cuda: bool = True
     """if toggled, cuda will be enabled by default"""
-    env_id: str = "PandaPush-v3" # 
+    env_id: str = "Nav2d-v0" #
     """the environment id of the Atari game"""
     total_timesteps: int = int(1e6)
     """total timesteps of the experiments"""
@@ -90,6 +86,7 @@ class Args:
     """probability of sampling a random action"""
 
     # DA hyperparams
+    daf: Optional[str] = None
     alpha: float = 0.50
     aug_ratio: int = 1 
 
@@ -230,7 +227,10 @@ poetry run pip install "stable_baselines3==2.0.0a1"
     )
     
     # @TODO: Initialize empty replay buffer for augmented data
-    aug_func = RelabelGoal(env=envs.envs[0])
+    if args.daf is not None:
+        daf = DAFS[args.env_id][args.daf](env=envs.envs[0])
+    else:
+        daf = None
 
     aug_rb = ReplayBuffer(
         args.buffer_size,
@@ -276,14 +276,15 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         rb.add(obs, real_next_obs, actions, rewards, terminations, infos)
         
         ###############
-        # @TODO: sample m augmented samples from a given DAF and append it to the augmented replay buffer
-        # aug_func = TranslateAgent(env=envs)
-        
-        aug_obs, aug_next_obs, aug_action, aug_reward, aug_terminated, aug_truncated, aug_infos = aug_func.augment(
-            obs, real_next_obs, actions, rewards, terminations, truncations, infos)
 
-        aug_rb.add(aug_obs, aug_next_obs, aug_action, aug_reward, aug_terminated, aug_infos) # doesn't need truncated?
+        # @TODO: sample m augmented samples from a given DAF and append it to the augmented replay buffer
+        if daf is not None:
+            aug_obs, aug_next_obs, aug_action, aug_reward, aug_terminated, aug_truncated, aug_infos = daf.augment(
+                obs, real_next_obs, actions, rewards, terminations, truncations, infos)
+
+            aug_rb.add(aug_obs, aug_next_obs, aug_action, aug_reward, aug_terminated, aug_infos) # doesn't need truncated?
         ##############
+
         # TRY NOT TO MODIFY: CRUCIAL step easy to overlook
         obs = next_obs
 

@@ -25,8 +25,7 @@ def check_valid(env, obs, next_obs, action, reward, terminated, truncated, info)
 
     # Set the environment state to match the input observation. Below is a template for how you would do this for a
     # MuJoCo task.
-    qpos, qvel = None, None
-    env.set_state(qpos, qvel)
+    env.set_state(pos=obs[:2], goal=obs[2:])
 
     # determine ture next_obs, reward
     true_next_obs, true_reward, true_terminated, true_truncated, true_info = env.step(action)

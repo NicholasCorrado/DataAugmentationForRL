@@ -2,16 +2,16 @@ from typing import Optional, Tuple
 
 import gymnasium as gym
 import numpy as np
-from gym.core import ObsType
+from gymnasium.core import ObsType
 
 class Nav2dEnv(gym.Env):
     def __init__(self, delta=0.025, sparse=1, d=1):
 
         self.n = 2
-        self.action_space = gym.spaces.Box(low=np.zeros(2), high=np.array([1, 2 * np.pi]), shape=(self.n,))
+        self.action_space = gym.spaces.Box(low=np.zeros(2), high=np.array([1, 2 * np.pi]), shape=(self.n,), dtype=np.float32)
 
         self.boundary = 1.05
-        self.observation_space = gym.spaces.Box(-self.boundary, +self.boundary, shape=(2 * self.n,))
+        self.observation_space = gym.spaces.Box(-self.boundary, +self.boundary, shape=(2 * self.n,), dtype=np.float32)
 
         self.step_num = 0
         self.delta = delta
