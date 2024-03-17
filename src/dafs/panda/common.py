@@ -27,6 +27,7 @@ class RelabelGoalBase(BaseDAF):
             reward: np.ndarray,
             terminated: np.ndarray,
             infos: List[Dict[str, Any]],
+            aug_ratio: int,
             **kwargs,
     ):
         """
@@ -43,7 +44,7 @@ class RelabelGoalBase(BaseDAF):
         """
 
         # sample new goal from the task's goal space.
-        new_goal = np.array([self.env.task._sample_goal()])
+        new_goal = np.array([self.env.task._sample_goal() for i in range(aug_ratio)])
 
         # relabel goal in obs and next_obs
         obs[:, self.desired_goal_mask] = new_goal
