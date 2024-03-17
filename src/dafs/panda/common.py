@@ -21,13 +21,11 @@ class RelabelGoalBase(BaseDAF):
 
     def _augment(
             self,
-            # aug_ratio: int,
             obs: np.ndarray,
             next_obs: np.ndarray,
             action: np.ndarray,
             reward: np.ndarray,
             terminated: np.ndarray,
-            truncated: np.ndarray,
             infos: List[Dict[str, Any]],
             **kwargs,
     ):
@@ -39,7 +37,6 @@ class RelabelGoalBase(BaseDAF):
         :param action:
         :param reward:
         :param terminated:
-        :param truncated:
         :param infos:
         :param kwargs:
         :return:
