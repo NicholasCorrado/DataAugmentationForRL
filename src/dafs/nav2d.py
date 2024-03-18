@@ -14,18 +14,17 @@ class TranslateAgent(BaseDAF):
 
     def _augment(
             self,
-            # aug_ratio: int,
             obs: np.ndarray,
             next_obs: np.ndarray,
             action: np.ndarray,
             reward: np.ndarray,
             terminated: np.ndarray,
-            truncated: np.ndarray,
             infos: List[Dict[str, Any]],
+            aug_ratio: int,
             **kwargs, ):
         # sample rand pos
-        new_pos_x = np.random.uniform(low=-1, high=1)
-        new_pos_y = np.random.uniform(low=-1, high=1)
+        new_pos_x = np.random.uniform(low=-1, high=1, size=(aug_ratio,))
+        new_pos_y = np.random.uniform(low=-1, high=1, size=(aug_ratio,))
 
         # compute new state
         delta_x = next_obs[:, 0] - obs[:, 0]
@@ -38,7 +37,7 @@ class TranslateAgent(BaseDAF):
         next_obs[:, 1] = new_pos_y + delta_y
 
         # vector of distances from goal
-        dist_from_goal = np.linalg.norm(next_obs[:, 0:2] - next_obs[:, 2:4])
+        dist_from_goal = np.linalg.norm(next_obs[:, 0:2] - next_obs[:, 2:4], axis=-1)
 
         # vector of bool at_goal true/false
         terminated[:] = dist_from_goal < 0.05

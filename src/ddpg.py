@@ -86,9 +86,9 @@ class Args:
     """probability of sampling a random action"""
 
     # DA hyperparams
-    daf: Optional[str] = None
+    daf: Optional[str] = 'TranslateAgent'
     alpha: float = 0.50
-    aug_ratio: int = 1 
+    aug_ratio: int = 16
 
     def __post_init__(self):
 
@@ -132,9 +132,9 @@ def make_env(env_id, seed, idx, capture_video, run_name):
 class QNetwork(nn.Module):
     def __init__(self, env):
         super().__init__()
-        self.fc1 = nn.Linear(np.array(env.single_observation_space.shape).prod() + np.prod(env.single_action_space.shape), 256)
-        self.fc2 = nn.Linear(256, 256)
-        self.fc3 = nn.Linear(256, 1)
+        self.fc1 = nn.Linear(np.array(env.single_observation_space.shape).prod() + np.prod(env.single_action_space.shape), 64)
+        self.fc2 = nn.Linear(64, 64)
+        self.fc3 = nn.Linear(64, 1)
 
     def forward(self, x, a):
         x = torch.cat([x, a], 1)
@@ -147,9 +147,9 @@ class QNetwork(nn.Module):
 class Actor(nn.Module):
     def __init__(self, env):
         super().__init__()
-        self.fc1 = nn.Linear(np.array(env.single_observation_space.shape).prod(), 256)
-        self.fc2 = nn.Linear(256, 256)
-        self.fc_mu = nn.Linear(256, np.prod(env.single_action_space.shape))
+        self.fc1 = nn.Linear(np.array(env.single_observation_space.shape).prod(), 64)
+        self.fc2 = nn.Linear(64, 64)
+        self.fc_mu = nn.Linear(64, np.prod(env.single_action_space.shape))
         # action rescaling
         self.register_buffer(
             "action_scale", torch.tensor((env.action_space.high - env.action_space.low) / 2.0, dtype=torch.float32)
@@ -279,10 +279,10 @@ poetry run pip install "stable_baselines3==2.0.0a1"
 
         # @TODO: sample m augmented samples from a given DAF and append it to the augmented replay buffer
         if daf is not None:
-            aug_obs, aug_next_obs, aug_action, aug_reward, aug_terminated, aug_truncated, aug_infos = daf.augment(
-                obs, real_next_obs, actions, rewards, terminations, truncations, infos)
+            aug_obs, aug_next_obs, aug_action, aug_reward, aug_terminated, aug_infos = daf.augment(
+                obs, real_next_obs, actions, rewards, terminations, infos, aug_ratio=args.aug_ratio)
 
-            aug_rb.add(aug_obs, aug_next_obs, aug_action, aug_reward, aug_terminated, aug_infos) # doesn't need truncated?
+            aug_rb.extend(aug_obs, aug_next_obs, aug_action, aug_reward, aug_terminated, aug_infos) # doesn't need truncated?
         ##############
 
         # TRY NOT TO MODIFY: CRUCIAL step easy to overlook
