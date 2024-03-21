@@ -1,6 +1,8 @@
 from typing import Dict, List, Any
 
 import numpy as np
+from gymnasium.vector import SyncVectorEnv
+
 
 class BaseDAF:
     """
@@ -8,6 +10,11 @@ class BaseDAF:
     """
     def __init__(self, env=None, **kwargs):
         self.env = env
+
+        if isinstance(self.env, SyncVectorEnv):
+            self.observation_space = env.single_observation_space
+        else:
+            self.observation_space = env.observation_space
 
     def _deepcopy_transition(
             self,
