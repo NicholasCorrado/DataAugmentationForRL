@@ -3,11 +3,10 @@ import os
 import random
 import time
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Optional, Union
 
 import gymnasium as gym
-import panda_gym
-import custom_envs
+import panda_gym, gymnasium_robotics, custom_envs
 from src.dafs import DAFS
 
 import numpy as np
@@ -42,8 +41,11 @@ class Args:
     """if toggled, `torch.backends.cudnn.deterministic=False`"""
     cuda: bool = True
     """if toggled, cuda will be enabled by default"""
-    env_id: str = "Nav2d-v0" #
+    env_id: str = "PointMaze_Large-v3" #
     """the environment id of the Atari game"""
+    env_kwargs: dict[str, Union[bool, float, str]] = field(default_factory=dict)
+    # env_kwargs: str = "arg1:one arg2:two"
+    """additional keyword arguments to be passed to the env constructor"""
     total_timesteps: int = int(1e6)
     """total timesteps of the experiments"""
     eval_freq: int = 10000
@@ -86,7 +88,7 @@ class Args:
     """probability of sampling a random action"""
 
     # DA hyperparams
-    daf: Optional[str] = 'TranslateAgent'
+    daf: Optional[str] = None
     alpha: float = 0.50
     aug_ratio: int = 16
 
@@ -108,14 +110,14 @@ class Args:
             yaml.dump(self, f, sort_keys=True)
 
 
-def make_env(env_id, seed, idx, capture_video, run_name):
+def make_env(env_id, env_kwargs, seed, idx, capture_video, run_name):
     def thunk():
         if capture_video and idx == 0:
-            env = gym.make(env_id, render_mode="rgb_array")
+            env = gym.make(env_id, render_mode="rgb_array", **env_kwargs)
             # env = Nav2dEnv()
             env = gym.wrappers.RecordVideo(env, f"videos/{run_name}")
         else:
-            env = gym.make(env_id)
+            env = gym.make(env_id, **env_kwargs)
             # env = Nav2dEnv()
 
         # Flatten Dict obs so we don't need to handle them a special case in DA
@@ -204,7 +206,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
     device = torch.device("cpu")
 
     # env setup
-    envs = gym.vector.SyncVectorEnv([make_env(args.env_id, args.seed, 0, args.capture_video, run_name)])
+    envs = gym.vector.SyncVectorEnv([make_env(args.env_id, args.env_kwargs, args.seed, 0, args.capture_video, run_name)])
     assert isinstance(envs.single_action_space, gym.spaces.Box), "only continuous action space is supported"
 
     actor = Actor(envs).to(device)
@@ -240,7 +242,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         handle_timeout_termination=False,
     )
 
-    eval_env = gym.vector.SyncVectorEnv([make_env(args.env_id, 0, 0, False, run_name)])
+    eval_env = gym.vector.SyncVectorEnv([make_env(args.env_id, args.env_kwargs, 0, 0, False, run_name)])
     evaluator = Evaluator(actor, eval_env, args.save_dir, n_eval_episodes=args.n_eval_episodes)
 
     start_time = time.time()

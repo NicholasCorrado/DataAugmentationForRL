@@ -82,7 +82,8 @@ class Evaluator:
 
                 if "final_info" in infos:
                     for info in infos["final_info"]:
-                        ep_successes.append(info.get('is_success', False))
+                        is_success = info.get('is_success', False) or info.get('success', False)
+                        ep_successes.append(is_success)
 
             eval_returns.append(np.sum(ep_rewards))
             eval_successes.append(np.sum(ep_successes))
