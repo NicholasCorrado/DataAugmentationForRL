@@ -16,7 +16,6 @@ from rliable.plot_utils import _decorate_axis, _annotate_and_decorate_axis, plot
 
 if __name__ == "__main__":
 
-    seaborn.set_theme(style='whitegrid')
 
     timestep_dict = {}
     results_dict = {}
