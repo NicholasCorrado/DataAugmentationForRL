@@ -60,7 +60,7 @@ class Args:
     """seed of the experiment"""
     save_rootdir: str = "results"
     """the top-level directory where results will be saved"""
-    save_subdir: Optional[str] = ""
+    save_subdir: Optional[str] = "2xTranslateGoal" # lower level broski
     """the lower-level directories where results will be saved"""
     save_dir: str = field(init=False)
     """the lower-level directories where results will be saved"""
@@ -70,13 +70,13 @@ class Args:
     # Algorithm specific arguments
     learning_rate: float = 3e-4
     """the learning rate of the optimizer"""
-    buffer_size: int = int(1e6)
+    buffer_size: int = int(2e6)
     """the replay memory buffer size"""
     gamma: float = 0.99
     """the discount factor gamma"""
     tau: float = 0.005
     """target smoothing coefficient (default: 0.005)"""
-    batch_size: int = 256
+    batch_size: int = 512
     """the batch size of sample from the reply memory"""
     exploration_noise: float = 0.1
     """the scale of exploration noise"""
@@ -288,12 +288,11 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         obs = next_obs
 
         # ALGO LOGIC: training.
-        alpha = 0.5 
         if global_step > args.learning_starts:
             # @TODO: For a given alpha \in [0, 1] sample (1-alpha)*batch_size samples from the observed replay buffer and
             # alpha*batch_size samples from the augmented replay buffer.
-            data = rb.sample(args.batch_size)
-            # data += aug_rb.sample(alpha * args.batch_size)
+            data = rb.sample((1 - args.alpha) * args.batch_size)
+            data += aug_rb.sample(args.alpha * args.batch_size)
             with torch.no_grad():
                 next_state_actions = target_actor(data.next_observations)
                 qf1_next_target = qf1_target(data.next_observations, next_state_actions)
@@ -323,7 +322,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                     writer.add_scalar("losses/qf1_values", qf1_a_values.mean().item(), global_step)
                     writer.add_scalar("losses/qf1_loss", qf1_loss.item(), global_step)
                     writer.add_scalar("losses/actor_loss", actor_loss.item(), global_step)
-                    print("SPS:", int(global_step / (time.time() - start_time)))
+                    # print("SPS:", int(global_step / (time.time() - start_time)))
                     writer.add_scalar("charts/SPS", int(global_step / (time.time() - start_time)), global_step)
 
         if global_step % args.eval_freq == 0:
