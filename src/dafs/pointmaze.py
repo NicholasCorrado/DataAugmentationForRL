@@ -7,7 +7,7 @@ from gymnasium_robotics.envs.maze import PointMazeEnv
 
 from src.dafs.base_daf import BaseDAF
 
-class TranslateAndRotate(BaseDAF):
+class TranslateRotate(BaseDAF):
     def __init__(self, env, **kwargs):
         super().__init__(env=env, **kwargs)
         self.effective_cell_radius = 0.39
@@ -142,7 +142,7 @@ class TranslateAndRotate(BaseDAF):
 
         return np.random.uniform(low=[xlo, ylo], high=[xhi, yhi], size=(len(cell_rowcol), 2)) * self.env.maze.maze_size_scaling
 
-class RelabelGoal(TranslateAndRotate):
+class RelabelGoal(TranslateRotate):
 
     def __init__(self, env, **kwargs):
         super().__init__(env, **kwargs)
@@ -171,6 +171,41 @@ class RelabelGoal(TranslateAndRotate):
 
         # compute termination signal
         terminated[:] = self.env.compute_terminated(next_obs[:, self.achieved_goal_mask], next_obs[:, self.desired_goal_mask], {})
+
+
+class TranslateRotateRelabelGoal(TranslateRotate):
+
+    def __init__(self, env, **kwargs):
+        super().__init__(env, **kwargs)
+
+    def _augment(
+            self,
+            obs: np.ndarray,
+            next_obs: np.ndarray,
+            action: np.ndarray,
+            reward: np.ndarray,
+            terminated: np.ndarray,
+            infos: List[Dict[str, Any]],
+            aug_ratio: int,
+            **kwargs,
+    ):
+
+        super()._augment(obs, next_obs, action, reward, terminated, infos, aug_ratio)
+
+        cell_rowcol = self._sample_valid_cells(aug_ratio)
+        new_goal = self._cell_rowcol_to_xy(cell_rowcol)
+        new_goal += self._sample_xy_position_noise(cell_rowcol=cell_rowcol)
+
+        # relabel goal
+        obs[:, self.desired_goal_mask] = new_goal
+        next_obs[:, self.desired_goal_mask] = new_goal
+
+        # compute reward
+        reward[:] = self.env.compute_reward(next_obs[:, self.achieved_goal_mask], next_obs[:, self.desired_goal_mask], {})
+
+        # compute termination signal
+        terminated[:] = self.env.compute_terminated(next_obs[:, self.achieved_goal_mask], next_obs[:, self.desired_goal_mask], {})
+
 
 def check_valid(env, obs, next_obs, action, reward, terminated, info):
     """
@@ -215,7 +250,7 @@ if __name__ == "__main__":
     env = FlattenObservation(env)
 
     num_steps = int(1e4)
-    aug_func = TranslateAndRotate(env)
+    aug_func = TranslateRotateRelabelGoal(env)
     # aug_func = RelabelGoal(env)
 
     for t in range(num_steps):

@@ -27,9 +27,9 @@ DAFS = {
     },
 
     'PointMaze_UMaze-v3': {
-        'RelabelGoal': None,
-        'TranslateAgent': None,
-        'RotateAgent': None,
+        'TranslateRotate': pointmaze.TranslateRotate,
+        'RelabelGoal': pointmaze.RelabelGoal,
+        'TranslateRotateRelabelGoal': pointmaze.TranslateRotateRelabelGoal,
     },
 
 

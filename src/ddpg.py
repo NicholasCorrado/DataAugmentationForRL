@@ -44,6 +44,12 @@ class Args:
     env_id: str = "PointMaze_Large-v3" #
     """the environment id of the Atari game"""
     env_kwargs: dict[str, Union[bool, float, str]] = field(default_factory=dict)
+    """
+    usage: --env_kwargs arg1 val1 arg2 val2 arg3 val3
+    
+    To make PointMaze tasks use a sparse reward function:
+        --env_kwargs continuing_task False
+    """
     # env_kwargs: str = "arg1:one arg2:two"
     """additional keyword arguments to be passed to the env constructor"""
     total_timesteps: int = int(1e6)
