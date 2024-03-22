@@ -5,7 +5,7 @@ import src.dafs.panda.pickandplace
 import src.dafs.panda.flip
 
 import src.dafs.nav2d
-import src.dafs.maze2d
+import src.dafs.pointmaze
 import src.dafs.antmaze
 
 DAFS = {

@@ -57,6 +57,8 @@ class TranslateAndRotate(BaseDAF):
             infos: List[Dict[str, Any]],
     ):
         # @TODO
+        # pos = obs[:, self.pos_mask]
+        # new_pos = self._cell_xy_to_rowcol(pos)
         return True
 
 
@@ -209,7 +211,7 @@ def check_valid(env, obs, next_obs, action, reward, terminated, info):
 
 if __name__ == "__main__":
 
-    env = gym.make('PointMaze_Large-v3', render_mode='human')
+    env = gym.make('PointMaze_Medium-v3', render_mode='human')
     env = FlattenObservation(env)
 
     num_steps = int(1e4)
