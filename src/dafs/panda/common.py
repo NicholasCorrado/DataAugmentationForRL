@@ -21,14 +21,13 @@ class RelabelGoalBase(BaseDAF):
 
     def _augment(
             self,
-            # aug_ratio: int,
             obs: np.ndarray,
             next_obs: np.ndarray,
             action: np.ndarray,
             reward: np.ndarray,
             terminated: np.ndarray,
-            truncated: np.ndarray,
             infos: List[Dict[str, Any]],
+            aug_ratio: int,
             **kwargs,
     ):
         """
@@ -39,14 +38,13 @@ class RelabelGoalBase(BaseDAF):
         :param action:
         :param reward:
         :param terminated:
-        :param truncated:
         :param infos:
         :param kwargs:
         :return:
         """
 
         # sample new goal from the task's goal space.
-        new_goal = np.array([self.env.task._sample_goal()])
+        new_goal = np.array([self.env.task._sample_goal() for i in range(aug_ratio)])
 
         # relabel goal in obs and next_obs
         obs[:, self.desired_goal_mask] = new_goal

@@ -1,6 +1,8 @@
 from typing import Dict, List, Any
 
 import numpy as np
+from gymnasium.vector import SyncVectorEnv
+
 
 class BaseDAF:
     """
@@ -9,6 +11,11 @@ class BaseDAF:
     def __init__(self, env=None, **kwargs):
         self.env = env
 
+        if isinstance(self.env, SyncVectorEnv):
+            self.observation_space = env.single_observation_space
+        else:
+            self.observation_space = env.observation_space
+
     def _deepcopy_transition(
             self,
             obs: np.ndarray,
@@ -16,9 +23,8 @@ class BaseDAF:
             action: np.ndarray,
             reward: np.ndarray,
             terminated: np.ndarray,
-            truncated: np.ndarray,
             infos: List[Dict[str, Any]],
-            aug_ratio: int = 1,
+            aug_ratio: int,
     ):
         """
         Deepcopy the input trajectory segment `aug_ratio` times.
@@ -28,7 +34,6 @@ class BaseDAF:
         :param action:
         :param reward:
         :param terminated:
-        :param truncated:
         :param infos:
         :param aug_ratio:
         :return:
@@ -37,12 +42,11 @@ class BaseDAF:
         aug_obs = np.tile(obs, (aug_ratio, 1))
         aug_next_obs = np.tile(next_obs, (aug_ratio, 1))
         aug_action = np.tile(action, (aug_ratio, 1))
-        aug_reward = np.tile(reward, (aug_ratio, 1))
-        aug_terminated = np.tile(terminated, (aug_ratio, 1)).astype(bool)
-        aug_truncated = np.tile(truncated, (aug_ratio, 1)).astype(bool)
+        aug_reward = np.tile(reward, (aug_ratio,))
+        aug_terminated = np.tile(terminated, (aug_ratio,)).astype(bool)
         aug_infos = np.tile([infos], (aug_ratio, 1))
 
-        return aug_obs, aug_next_obs, aug_action, aug_reward, aug_terminated, aug_truncated, aug_infos
+        return aug_obs, aug_next_obs, aug_action, aug_reward, aug_terminated, aug_infos
 
     def _is_valid(
             self,
@@ -51,7 +55,6 @@ class BaseDAF:
             action: np.ndarray,
             reward: np.ndarray,
             terminated: np.ndarray,
-            truncated: np.ndarray,
             infos: List[Dict[str, Any]],
     ):
         """
@@ -71,14 +74,13 @@ class BaseDAF:
 
     def augment(
             self,
-            # aug_ratio: int,
             obs: np.ndarray,
             next_obs: np.ndarray,
             action: np.ndarray,
             reward: np.ndarray,
             terminated: np.ndarray,
-            truncated: np.ndarray,
             infos: List[Dict[str, Any]],
+            aug_ratio: int,
             **kwargs,
     ):
         """
@@ -89,41 +91,32 @@ class BaseDAF:
         :param action:
         :param reward:
         :param terminated:
-        :param truncated:
         :param infos:
         :param kwargs:
         :return:
         """
 
         # If the input is not a valid for the given DAF, return None.
-        if not self._is_valid(obs, next_obs, action, reward, terminated, truncated, infos):
+        if not self._is_valid(obs, next_obs, action, reward, terminated, infos):
             return None
 
         aug_transition = \
-            self._deepcopy_transition(obs, next_obs, action, reward, terminated, truncated, infos, aug_ratio=1)
+            self._deepcopy_transition(obs, next_obs, action, reward, terminated, infos, aug_ratio=aug_ratio)
 
-        self._augment(*aug_transition, **kwargs)
-        aug_obs, aug_next_obs, aug_action, aug_reward, aug_terminated, aug_truncated, aug_infos = aug_transition
+        self._augment(*aug_transition, aug_ratio=aug_ratio, **kwargs)
+        aug_obs, aug_next_obs, aug_action, aug_reward, aug_terminated, aug_infos = aug_transition
 
-        # aug_obs = aug_obs.reshape((-1, 1, aug_obs.shape[-1]))
-        # aug_next_obs = aug_next_obs.reshape((-1, 1, aug_next_obs.shape[-1]))
-        # aug_action = aug_action.reshape((-1, 1, aug_action.shape[-1]))
-        # aug_reward = aug_reward.reshape(-1, 1)
-        # aug_done = aug_done.reshape(-1, 1)
-        # aug_infos = aug_infos.reshape((-1,1))
-
-        return aug_obs, aug_next_obs, aug_action, aug_reward, aug_terminated, aug_truncated, aug_infos
+        return aug_obs, aug_next_obs, aug_action, aug_reward, aug_terminated, aug_infos
 
     def _augment(
             self,
-            # aug_ratio: int,
             obs: np.ndarray,
             next_obs: np.ndarray,
             action: np.ndarray,
             reward: np.ndarray,
             terminated: np.ndarray,
-            truncated: np.ndarray,
             infos: List[Dict[str, Any]],
+            aug_ratio: int,
             **kwargs,
     ):
         """
@@ -134,7 +127,6 @@ class BaseDAF:
         :param action:
         :param reward:
         :param terminated:
-        :param truncated:
         :param infos:
         :param kwargs:
         :return:

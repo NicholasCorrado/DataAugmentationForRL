@@ -3,10 +3,12 @@ import os
 import random
 import time
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Optional, Union
 
 import gymnasium as gym
-import panda_gym
+import panda_gym, gymnasium_robotics, custom_envs
+from src.dafs import DAFS
+
 import numpy as np
 import torch
 import torch.nn as nn
@@ -39,8 +41,17 @@ class Args:
     """if toggled, `torch.backends.cudnn.deterministic=False`"""
     cuda: bool = True
     """if toggled, cuda will be enabled by default"""
-    env_id: str = "PandaPush-v3"
+    env_id: str = "PointMaze_Large-v3" #
     """the environment id of the Atari game"""
+    env_kwargs: dict[str, Union[bool, float, str]] = field(default_factory=dict)
+    """
+    usage: --env_kwargs arg1 val1 arg2 val2 arg3 val3
+    
+    To make PointMaze tasks use a sparse reward function:
+        --env_kwargs continuing_task False
+    """
+    # env_kwargs: str = "arg1:one arg2:two"
+    """additional keyword arguments to be passed to the env constructor"""
     total_timesteps: int = int(1e6)
     """total timesteps of the experiments"""
     eval_freq: int = 10000
@@ -81,6 +92,12 @@ class Args:
     """noise clip parameter of the Target Policy Smoothing Regularization"""
     random_action_prob: float = 0.0
     """probability of sampling a random action"""
+
+    # DA hyperparams
+    daf: Optional[str] = None
+    alpha: float = 0.50
+    aug_ratio: int = 16
+
     def __post_init__(self):
 
         self.save_dir = f"{self.save_rootdir}/{self.env_id}/ddpg/{self.save_subdir}"
@@ -99,13 +116,16 @@ class Args:
             yaml.dump(self, f, sort_keys=True)
 
 
-def make_env(env_id, seed, idx, capture_video, run_name):
+def make_env(env_id, env_kwargs, seed, idx, capture_video, run_name):
     def thunk():
         if capture_video and idx == 0:
-            env = gym.make(env_id, render_mode="rgb_array")
+            env = gym.make(env_id, render_mode="rgb_array", **env_kwargs)
+            # env = Nav2dEnv()
             env = gym.wrappers.RecordVideo(env, f"videos/{run_name}")
         else:
-            env = gym.make(env_id)
+            env = gym.make(env_id, **env_kwargs)
+            # env = Nav2dEnv()
+
         # Flatten Dict obs so we don't need to handle them a special case in DA
         if isinstance(env.observation_space, gym.spaces.Dict):
             env = gym.wrappers.FlattenObservation(env)
@@ -120,9 +140,9 @@ def make_env(env_id, seed, idx, capture_video, run_name):
 class QNetwork(nn.Module):
     def __init__(self, env):
         super().__init__()
-        self.fc1 = nn.Linear(np.array(env.single_observation_space.shape).prod() + np.prod(env.single_action_space.shape), 256)
-        self.fc2 = nn.Linear(256, 256)
-        self.fc3 = nn.Linear(256, 1)
+        self.fc1 = nn.Linear(np.array(env.single_observation_space.shape).prod() + np.prod(env.single_action_space.shape), 64)
+        self.fc2 = nn.Linear(64, 64)
+        self.fc3 = nn.Linear(64, 1)
 
     def forward(self, x, a):
         x = torch.cat([x, a], 1)
@@ -135,9 +155,9 @@ class QNetwork(nn.Module):
 class Actor(nn.Module):
     def __init__(self, env):
         super().__init__()
-        self.fc1 = nn.Linear(np.array(env.single_observation_space.shape).prod(), 256)
-        self.fc2 = nn.Linear(256, 256)
-        self.fc_mu = nn.Linear(256, np.prod(env.single_action_space.shape))
+        self.fc1 = nn.Linear(np.array(env.single_observation_space.shape).prod(), 64)
+        self.fc2 = nn.Linear(64, 64)
+        self.fc_mu = nn.Linear(64, np.prod(env.single_action_space.shape))
         # action rescaling
         self.register_buffer(
             "action_scale", torch.tensor((env.action_space.high - env.action_space.low) / 2.0, dtype=torch.float32)
@@ -188,10 +208,11 @@ poetry run pip install "stable_baselines3==2.0.0a1"
     torch.manual_seed(args.seed)
     torch.backends.cudnn.deterministic = args.torch_deterministic
 
-    device = torch.device("cuda" if torch.cuda.is_available() and args.cuda else "cpu")
+    # device = torch.device("cuda" if torch.cuda.is_available() and args.cuda else "cpu")
+    device = torch.device("cpu")
 
     # env setup
-    envs = gym.vector.SyncVectorEnv([make_env(args.env_id, args.seed, 0, args.capture_video, run_name)])
+    envs = gym.vector.SyncVectorEnv([make_env(args.env_id, args.env_kwargs, args.seed, 0, args.capture_video, run_name)])
     assert isinstance(envs.single_action_space, gym.spaces.Box), "only continuous action space is supported"
 
     actor = Actor(envs).to(device)
@@ -212,9 +233,22 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         # Since we're using gymnasium, we'll use the `terminated` flag to handle timeout vs termination.
         handle_timeout_termination=False,
     )
+    
     # @TODO: Initialize empty replay buffer for augmented data
+    if args.daf is not None:
+        daf = DAFS[args.env_id][args.daf](env=envs.envs[0])
+    else:
+        daf = None
 
-    eval_env = gym.vector.SyncVectorEnv([make_env(args.env_id, 0, 0, False, run_name)])
+    aug_rb = ReplayBuffer(
+        args.buffer_size,
+        envs.single_observation_space,
+        envs.single_action_space,
+        device,
+        handle_timeout_termination=False,
+    )
+
+    eval_env = gym.vector.SyncVectorEnv([make_env(args.env_id, args.env_kwargs, 0, 0, False, run_name)])
     evaluator = Evaluator(actor, eval_env, args.save_dir, n_eval_episodes=args.n_eval_episodes)
 
     start_time = time.time()
@@ -231,6 +265,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 actions += torch.normal(0, actor.action_scale * args.exploration_noise)
                 actions = actions.cpu().numpy().clip(envs.single_action_space.low, envs.single_action_space.high)
 
+        # print("actions ", actions)
         # TRY NOT TO MODIFY: execute the game and log data.
         next_obs, rewards, terminations, truncations, infos = envs.step(actions)
 
@@ -247,17 +282,27 @@ poetry run pip install "stable_baselines3==2.0.0a1"
             if trunc:
                 real_next_obs[idx] = infos["final_observation"][idx]
         rb.add(obs, real_next_obs, actions, rewards, terminations, infos)
+        
+        ###############
 
         # @TODO: sample m augmented samples from a given DAF and append it to the augmented replay buffer
+        if daf is not None:
+            aug_obs, aug_next_obs, aug_action, aug_reward, aug_terminated, aug_infos = daf.augment(
+                obs, real_next_obs, actions, rewards, terminations, infos, aug_ratio=args.aug_ratio)
+
+            aug_rb.extend(aug_obs, aug_next_obs, aug_action, aug_reward, aug_terminated, aug_infos) # doesn't need truncated?
+        ##############
 
         # TRY NOT TO MODIFY: CRUCIAL step easy to overlook
         obs = next_obs
 
         # ALGO LOGIC: training.
+        alpha = 0.5 
         if global_step > args.learning_starts:
             # @TODO: For a given alpha \in [0, 1] sample (1-alpha)*batch_size samples from the observed replay buffer and
             # alpha*batch_size samples from the augmented replay buffer.
             data = rb.sample(args.batch_size)
+            # data += aug_rb.sample(alpha * args.batch_size)
             with torch.no_grad():
                 next_state_actions = target_actor(data.next_observations)
                 qf1_next_target = qf1_target(data.next_observations, next_state_actions)

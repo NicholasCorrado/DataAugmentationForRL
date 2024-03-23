@@ -1,12 +1,10 @@
 # WeakDataAugmentation
 
 ```commandline
-cd WeakDataAugmentation
+cd DataAugmentationForRL
 pip install -e .
-cd src
-pip install -e custom-envs
-pip install panda-gym
-... # pip install package dependencies
+pip install -e src/custom_envs
+pip install gymnasium panda-gym torch tyro pyyaml stable-baselines3 tensorboard gymnasium_robotics rliable
 ```
 
 ## Training Example

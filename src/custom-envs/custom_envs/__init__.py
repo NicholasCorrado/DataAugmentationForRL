@@ -1,7 +1,4 @@
-import os
-from gym.envs.registration import register
-
-# ENVS_DIR = os.path.join(os.path.dirname(__file__), 'envs')
+from gymnasium import register
 
 register(
     id="Nav2d-v0",
