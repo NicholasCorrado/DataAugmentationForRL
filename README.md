@@ -4,8 +4,7 @@
 cd DataAugmentationForRL
 pip install -e .
 pip install -e src/custom_envs
-pip install gymnasium panda-gym torch tyro pyyaml stable-baselines3 tensorboard gymnasium_robotics
-pip install rliable
+pip install gymnasium panda-gym torch tyro pyyaml stable-baselines3 tensorboard gymnasium_robotics rliable
 ```
 
 ## Training Example
