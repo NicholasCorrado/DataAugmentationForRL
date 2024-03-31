@@ -5,7 +5,7 @@ import src.dafs.panda.pickandplace
 import src.dafs.panda.flip
 
 import src.dafs.nav2d
-import src.dafs.maze2d
+import src.dafs.pointmaze
 import src.dafs.antmaze
 
 DAFS = {
@@ -27,9 +27,9 @@ DAFS = {
     },
 
     'PointMaze_UMaze-v3': {
-        'RelabelGoal': None,
-        'TranslateAgent': None,
-        'RotateAgent': None,
+        'TranslateRotate': pointmaze.TranslateRotate,
+        'RelabelGoal': pointmaze.RelabelGoal,
+        'TranslateRotateRelabelGoal': pointmaze.TranslateRotateRelabelGoal,
     },
 
 
