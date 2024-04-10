@@ -16,7 +16,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 import tyro
 import yaml
-from stable_baselines3.common.buffers import ReplayBuffer
+from stable_baselines3.common.buffers import ReplayBuffer, ReplayBufferSamples
 from torch.utils.tensorboard import SummaryWriter
 
 from src.utils import get_latest_run_id
@@ -25,24 +25,17 @@ from src.evaluator import Evaluator
 @dataclass
 class Args:
     # wandb tracking
-    exp_name: str = os.path.basename(__file__)[: -len(".py")]
-    """the name of this experiment"""
-    track: bool = False
-    """if toggled, this experiment will be tracked with Weights and Biases"""
-    wandb_project_name: str = "cleanRL"
-    """the wandb's project name"""
-    wandb_entity: Optional[str] = None
-    """the entity (team) of wandb's project"""
-    capture_video: bool = False
-    """whether to capture videos of the agent performances (check out `videos` folder)"""
+    exp_name: str = os.path.basename(__file__)[: -len(".py")]  # experiment name
+    track: bool = False             # if toggled, experiment will be tracked on wandb
+    wandb_project_name: str = "cleanRL" # wandb's project name
+    wandb_entity: Optional[str] = None # the entity (team) of wandb's project
+    capture_video: bool = False # whether to capture videos of the agent performances (check `videos` folder)
 
     # experiment config
-    torch_deterministic: bool = True
-    """if toggled, `torch.backends.cudnn.deterministic=False`"""
-    cuda: bool = True
-    """if toggled, cuda will be enabled by default"""
-    env_id: str = "PointMaze_Large-v3" #
-    """the environment id of the Atari game"""
+    torch_deterministic: bool = True # if toggled, `torch.backends.cudnn.deterministic=False`
+    cuda: bool = True # if toggled, cuda will be enabled by default
+    env_id: str = "PandaPickAndPlace-v3" # environment id of the Atari game
+
     env_kwargs: dict[str, Union[bool, float, str]] = field(default_factory=dict)
     """
     usage: --env_kwargs arg1 val1 arg2 val2 arg3 val3
@@ -50,51 +43,35 @@ class Args:
     To make PointMaze tasks use a sparse reward function:
         --env_kwargs continuing_task False
     """
-    # env_kwargs: str = "arg1:one arg2:two"
-    """additional keyword arguments to be passed to the env constructor"""
-    total_timesteps: int = int(1e6)
-    """total timesteps of the experiments"""
-    eval_freq: int = 10000
-    """number of timesteps between policy evaluations"""
-    n_eval_episodes: int = 50
-    """number of eval episodes"""
-    seed: Optional[int] = None
-    """seed of the experiment"""
+    # env_kwargs: str = "arg1:one arg2:two" # additional keyword arguments to be passed to the env constructor
+    total_timesteps: int = int(1e6)         # total timesteps of the experiments
+    eval_freq: int = 10000                  # num of timesteps between policy evals
+    n_eval_episodes: int = 50               # num of eval episodes
+    seed: Optional[int] = None              # seed of the experiment
+
     run_id: Optional[int] = None
-    """seed of the experiment"""
-    save_rootdir: str = "results"
-    """the top-level directory where results will be saved"""
-    save_subdir: Optional[str] = ""
-    """the lower-level directories where results will be saved"""
-    save_dir: str = field(init=False)
-    """the lower-level directories where results will be saved"""
-    save_model: bool = False
-    """whether to save model into the `runs/{run_name}` folder"""
+    save_rootdir: str = "results"                   # top-level directory where results will be saved
+    save_subdir: Optional[str] = "2xTranslateGoal"  # lower level directories
+    save_dir: str = field(init=False)               # the lower-level directories 
+    save_model: bool = False # whether to save model into the `runs/{run_name}` folder
 
     # Algorithm specific arguments
-    learning_rate: float = 3e-4
-    """the learning rate of the optimizer"""
-    buffer_size: int = int(1e6)
-    """the replay memory buffer size"""
-    gamma: float = 0.99
-    """the discount factor gamma"""
-    tau: float = 0.005
-    """target smoothing coefficient (default: 0.005)"""
-    batch_size: int = 256
-    """the batch size of sample from the reply memory"""
-    exploration_noise: float = 0.1
-    """the scale of exploration noise"""
-    learning_starts: int = 25e3
-    """timestep to start learning"""
-    policy_frequency: int = 2
-    """the frequency of training policy (delayed)"""
-    noise_clip: float = 0.5
-    """noise clip parameter of the Target Policy Smoothing Regularization"""
-    random_action_prob: float = 0.0
-    """probability of sampling a random action"""
+    learning_rate: float = 3e-4     # learning rate of optimizer
+    buffer_size: int = int(2e6)     # replay memory buffer size
+    gamma: float = 0.99             # discount factor gamma
+    tau: float = 0.005              # target smoothing coefficient (default: 0.005)
+    batch_size: int = 512           # batch size of sample from the reply memory
+    exploration_noise: float = 0.1  # scale of exploration noise
+    # learning_starts: int = 25e3     # timestep to start learning
+    learning_starts: int = 0     # timestep to start learning
+    policy_frequency: int = 2       # frequency of training policy (delayed)
+    noise_clip: float = 0.5         # noise clip parameter of the Target Policy Smoothing Regularization
+    random_action_prob: float = 0.0 # probability of sampling a random action
 
     # DA hyperparams
-    daf: Optional[str] = None
+    daf: Optional[str] = "RelabelGoal"
+
+      # DA hyperparams
     alpha: float = 0.50
     aug_ratio: int = 16
 
@@ -134,7 +111,6 @@ def make_env(env_id, env_kwargs, seed, idx, capture_video, run_name):
         return env
 
     return thunk
-
 
 # ALGO LOGIC: initialize agent here:
 class QNetwork(nn.Module):
@@ -284,8 +260,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         rb.add(obs, real_next_obs, actions, rewards, terminations, infos)
         
         ###############
-
-        # @TODO: sample m augmented samples from a given DAF and append it to the augmented replay buffer
+        # sample m augmented samples from a given DAF and append it to the augmented replay buffer
         if daf is not None:
             aug_obs, aug_next_obs, aug_action, aug_reward, aug_terminated, aug_infos = daf.augment(
                 obs, real_next_obs, actions, rewards, terminations, infos, aug_ratio=args.aug_ratio)
@@ -299,10 +274,28 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         # ALGO LOGIC: training.
         alpha = 0.5 
         if global_step > args.learning_starts:
-            # @TODO: For a given alpha \in [0, 1] sample (1-alpha)*batch_size samples from the observed replay buffer and
+            ###############
+            # For a given alpha \in [0, 1] sample (1-alpha)*batch_size samples from the observed replay buffer and
             # alpha*batch_size samples from the augmented replay buffer.
-            data = rb.sample(args.batch_size)
-            # data += aug_rb.sample(alpha * args.batch_size)
+            if daf is not None:
+                obs_data_size = int((1 - args.alpha) * args.batch_size) # must be int, not float
+                obs_data = rb.sample(obs_data_size)
+                # data += aug_rb.sample(int(args.alpha * args.batch_size))
+                aug_data = aug_rb.sample(int(args.alpha * args.batch_size))
+                # data += aug_data
+                # data = rb.sample(args.batch_size)
+                # data.add(aug_rb.observations[0], aug_rb.observations[1], aug_rb.actions[0],\
+                #         aug_rb.rewards[0], aug_rb.done: np.ndarray)
+                observations = torch.concat((obs_data.observations, aug_data.observations))
+                actions = torch.concat((obs_data.actions, aug_data.actions))
+                next_observations = torch.concat((obs_data.next_observations, aug_data.next_observations))
+                rewards = torch.concat((obs_data.rewards, aug_data.rewards))
+                dones = torch.concat((obs_data.dones, aug_data.dones))
+
+                data = ReplayBufferSamples(observations, actions, next_observations, dones, rewards)
+            ##############
+            else:
+                data = rb.sample(args.batch_size)
             with torch.no_grad():
                 next_state_actions = target_actor(data.next_observations)
                 qf1_next_target = qf1_target(data.next_observations, next_state_actions)
@@ -332,7 +325,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                     writer.add_scalar("losses/qf1_values", qf1_a_values.mean().item(), global_step)
                     writer.add_scalar("losses/qf1_loss", qf1_loss.item(), global_step)
                     writer.add_scalar("losses/actor_loss", actor_loss.item(), global_step)
-                    print("SPS:", int(global_step / (time.time() - start_time)))
+                    # print("SPS:", int(global_step / (time.time() - start_time)))
                     writer.add_scalar("charts/SPS", int(global_step / (time.time() - start_time)), global_step)
 
         if global_step % args.eval_freq == 0:
