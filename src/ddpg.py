@@ -48,6 +48,7 @@ class Args:
     eval_freq: int = 10000                  # num of timesteps between policy evals
     n_eval_episodes: int = 50               # num of eval episodes
     seed: Optional[int] = None              # seed of the experiment
+
     run_id: Optional[int] = None
     save_rootdir: str = "results"                   # top-level directory where results will be saved
     save_subdir: Optional[str] = "2xTranslateGoal"  # lower level directories
@@ -69,6 +70,8 @@ class Args:
 
     # DA hyperparams
     daf: Optional[str] = "RelabelGoal"
+
+      # DA hyperparams
     alpha: float = 0.50
     aug_ratio: int = 16
 
@@ -269,6 +272,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         obs = next_obs
 
         # ALGO LOGIC: training.
+        alpha = 0.5 
         if global_step > args.learning_starts:
             ###############
             # For a given alpha \in [0, 1] sample (1-alpha)*batch_size samples from the observed replay buffer and
@@ -292,7 +296,6 @@ poetry run pip install "stable_baselines3==2.0.0a1"
             ##############
             else:
                 data = rb.sample(args.batch_size)
-
             with torch.no_grad():
                 next_state_actions = target_actor(data.next_observations)
                 qf1_next_target = qf1_target(data.next_observations, next_state_actions)
