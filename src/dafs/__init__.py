@@ -31,6 +31,14 @@ DAFS = {
         'RelabelGoal': pointmaze.RelabelGoal,
         'TranslateRotateRelabelGoal': pointmaze.TranslateRotateRelabelGoal,
     },
-
-
+    'PointMaze_Medium-v3': {
+        'TranslateRotate': pointmaze.TranslateRotate,
+        'RelabelGoal': pointmaze.RelabelGoal,
+        'TranslateRotateRelabelGoal': pointmaze.TranslateRotateRelabelGoal,
+    },
+    'PointMaze_Large-v3': {
+        'TranslateRotate': pointmaze.TranslateRotate,
+        'RelabelGoal': pointmaze.RelabelGoal,
+        'TranslateRotateRelabelGoal': pointmaze.TranslateRotateRelabelGoal,
+    },
 }
