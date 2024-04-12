@@ -36,7 +36,7 @@ class Args:
     cuda: bool = True # if toggled, cuda will be enabled by default
     env_id: str = "PandaPickAndPlace-v3" # environment id of the Atari game
 
-    env_kwargs: dict[str, Union[bool, float, str]] = field(default_factory=dict)
+    env_kwargs: dict[str, Union[bool, float, str]] = field(default_factory=dict) 
     """
     usage: --env_kwargs arg1 val1 arg2 val2 arg3 val3
     
@@ -62,18 +62,18 @@ class Args:
     tau: float = 0.005              # target smoothing coefficient (default: 0.005)
     batch_size: int = 512           # batch size of sample from the reply memory
     exploration_noise: float = 0.1  # scale of exploration noise
-    # learning_starts: int = 25e3     # timestep to start learning
-    learning_starts: int = 0     # timestep to start learning
+    # learning_starts: int = 0     # timestep to start learning
+    learning_starts: int = 25e3        # timestep to start learning
     policy_frequency: int = 2       # frequency of training policy (delayed)
     noise_clip: float = 0.5         # noise clip parameter of the Target Policy Smoothing Regularization
     random_action_prob: float = 0.0 # probability of sampling a random action
 
     # DA hyperparams
-    daf: Optional[str] = "RelabelGoal"
-
-      # DA hyperparams
+    daf: Optional[str] = None
     alpha: float = 0.50
     aug_ratio: int = 16
+
+    network_struct: str = '64,64'   # Structure of the network
 
     def __post_init__(self):
 
@@ -113,27 +113,94 @@ def make_env(env_id, env_kwargs, seed, idx, capture_video, run_name):
     return thunk
 
 # ALGO LOGIC: initialize agent here:
+# class QNetwork(nn.Module):
+#     def __init__(self, env):
+#         super().__init__()
+#         self.fc1 = nn.Linear(np.array(env.single_observation_space.shape).prod() + np.prod(env.single_action_space.shape), 64)
+#         self.fc2 = nn.Linear(64,64)
+#         self.fc3 = nn.Linear(64, 1)
+
+#     def forward(self, x, a):
+#         x = torch.cat([x, a], 1)
+#         x = F.relu(self.fc1(x))
+#         x = F.relu(self.fc2(x))
+#         x = self.fc3(x)
+#         return x
+
+# Uses param network_struct to construct network
 class QNetwork(nn.Module):
     def __init__(self, env):
         super().__init__()
-        self.fc1 = nn.Linear(np.array(env.single_observation_space.shape).prod() + np.prod(env.single_action_space.shape), 64)
-        self.fc2 = nn.Linear(64, 64)
-        self.fc3 = nn.Linear(64, 1)
-
+        valid_networks = ['64,64', '256,256', '256,256,256']
+        if args.network_struct in valid_networks:
+            shape = np.fromstring(args.network_struct,dtype=np.int32,sep=',')
+        else: # invalid shape
+            print("Exiting: incorrect network_struct inputed. Try: '64,64', '256,256', or '256,256,256'")
+            exit()
+        
+        layer_size = shape[0] # assume the structure is equal sizing
+        self.dims = len(shape)
+        if self.dims == 2: # 64,64 or 256,256
+            self.fc1 = nn.Linear(np.array(env.single_observation_space.shape).prod() + np.prod(env.single_action_space.shape), \
+                                layer_size)
+            self.fc2 = nn.Linear(layer_size, layer_size)
+            self.fc3 = nn.Linear(layer_size, 1)
+        elif self.dims == 3: # 256,256,256
+            self.fc1 = nn.Linear(np.array(env.single_observation_space.shape).prod() + np.prod(env.single_action_space.shape), \
+                                 layer_size)
+            self.fc2 = nn.Linear(layer_size, layer_size)
+            self.fc3 = nn.Linear(layer_size, layer_size)
+            self.fc4 = nn.Linear(layer_size, 1)
+        else: # invalid
+            print("Exiting: incorrect network_struct inputed. Try: '64,64', '256,256', or '256,256,256'")
+            exit()
+    
     def forward(self, x, a):
-        x = torch.cat([x, a], 1)
-        x = F.relu(self.fc1(x))
-        x = F.relu(self.fc2(x))
-        x = self.fc3(x)
-        return x
+        if self.dims == 2:
+            x = torch.cat([x, a], 1)
+            x = F.relu(self.fc1(x))
+            x = F.relu(self.fc2(x))
+            x = self.fc3(x)
+            return x
+        elif self.dims == 3: 
+            x = torch.cat([x, a], 1)
+            x = F.relu(self.fc1(x))
+            x = F.relu(self.fc2(x))
+            x = F.relu(self.fc3(x))
+            x = self.fc4(x)
+            return x
+        
+        print("3 Exiting: incorrect network_struct inputed. Try: '64,64', '256,256', or '256,256,256'")
+        exit()
 
 
 class Actor(nn.Module):
     def __init__(self, env):
         super().__init__()
-        self.fc1 = nn.Linear(np.array(env.single_observation_space.shape).prod(), 64)
-        self.fc2 = nn.Linear(64, 64)
-        self.fc_mu = nn.Linear(64, np.prod(env.single_action_space.shape))
+        valid_networks = ['64,64', '256,256', '256,256,256']
+
+        if args.network_struct in valid_networks:
+            shape = np.fromstring(args.network_struct,dtype=np.int32,sep=',')
+        else: # invalid shape
+            print("4 Exiting: incorrect network_struct inputed. Try: '64,64', '256,256', or '256,256,256'")
+            exit()
+        
+        layer_size = shape[0] # assume the structure is equal sizing
+        self.dims = len(shape)
+        if self.dims == 2: # 64,64 or 256,256
+            self.fc1 = nn.Linear(np.array(env.single_observation_space.shape).prod(), layer_size)
+            self.fc2 = nn.Linear(layer_size, layer_size)
+            self.fc_mu = nn.Linear(layer_size, np.prod(env.single_action_space.shape))
+
+        elif self.dims == 3: # 256,256,256
+            self.fc1 = nn.Linear(np.array(env.single_observation_space.shape).prod(), layer_size)
+            self.fc2 = nn.Linear(layer_size, layer_size)
+            self.fc3 = nn.Linear(layer_size, layer_size)
+            self.fc_mu = nn.Linear(layer_size, np.prod(env.single_action_space.shape))
+        else: # invalid
+            print("Exiting: incorrect network_struct inputed. Try: '64,64', '256,256', or '256,256,256'")
+            exit()
+        
         # action rescaling
         self.register_buffer(
             "action_scale", torch.tensor((env.action_space.high - env.action_space.low) / 2.0, dtype=torch.float32)
@@ -143,10 +210,17 @@ class Actor(nn.Module):
         )
 
     def forward(self, x):
-        x = F.relu(self.fc1(x))
-        x = F.relu(self.fc2(x))
-        x = torch.tanh(self.fc_mu(x))
-        return x * self.action_scale + self.action_bias
+        if self.dims == 2:
+            x = F.relu(self.fc1(x))
+            x = F.relu(self.fc2(x))
+            x = torch.tanh(self.fc_mu(x))
+            return x * self.action_scale + self.action_bias
+        elif self.dims == 3: 
+            x = F.relu(self.fc1(x))
+            x = F.relu(self.fc2(x))
+            x = F.relu(self.fc3(x))
+            x = torch.tanh(self.fc_mu(x))
+            return x * self.action_scale + self.action_bias
 
 
 if __name__ == "__main__":
