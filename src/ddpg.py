@@ -50,9 +50,9 @@ class Args:
     seed: Optional[int] = None              # seed of the experiment
 
     run_id: Optional[int] = None
-    save_rootdir: str = "results"                   # top-level directory where results will be saved
-    save_subdir: Optional[str] = "2xTranslateGoal"  # lower level directories
-    save_dir: str = field(init=False)               # the lower-level directories 
+    save_rootdir: str = "results"           # top-level directory where results will be saved
+    save_subdir: Optional[str] = None       # lower level directories
+    save_dir: str = field(init=False)       # the lower-level directories 
     save_model: bool = False # whether to save model into the `runs/{run_name}` folder
 
     # Algorithm specific arguments
@@ -62,7 +62,7 @@ class Args:
     tau: float = 0.005              # target smoothing coefficient (default: 0.005)
     batch_size: int = 512           # batch size of sample from the reply memory
     exploration_noise: float = 0.1  # scale of exploration noise
-    # learning_starts: int = 0     # timestep to start learning
+    # learning_starts: int = 0      # timestep to start learning
     learning_starts: int = 25e3        # timestep to start learning
     policy_frequency: int = 2       # frequency of training policy (delayed)
     noise_clip: float = 0.5         # noise clip parameter of the Target Policy Smoothing Regularization
@@ -72,16 +72,17 @@ class Args:
     daf: Optional[str] = None
     alpha: float = 0.50
     aug_ratio: int = 16
-
-    network_struct: str = '64,64'   # Structure of the network
+  
+    net_arch: list[int] = (64, 64)  # Structure of the network, default 64,64
 
     def __post_init__(self):
-
-        self.save_dir = f"{self.save_rootdir}/{self.env_id}/ddpg/{self.save_subdir}"
+        if self.save_subdir == None:
+            self.save_dir = f"{self.save_rootdir}/{self.env_id}/ddpg"
+        else:
+            self.save_dir = f"{self.save_rootdir}/{self.env_id}/ddpg/{self.save_subdir}"
         if self.run_id is None:
             self.run_id = get_latest_run_id(save_dir=self.save_dir) + 1
         self.save_dir += f"/run_{self.run_id}"
-
         if self.seed is None:
             self.seed = self.run_id
         else:
@@ -112,33 +113,31 @@ def make_env(env_id, env_kwargs, seed, idx, capture_video, run_name):
 
     return thunk
 
-# Uses param network_struct to construct network
+# Uses param net_arch to construct network
 class QNetwork(nn.Module):
     def __init__(self, env):
         super().__init__()
-        valid_networks = ['64,64', '256,256', '256,256,256']
-        if args.network_struct in valid_networks:
-            shape = np.fromstring(args.network_struct,dtype=np.int32,sep=',')
-        else: # invalid shape
-            print("Exiting: incorrect network_struct inputed. Try: '64,64', '256,256', or '256,256,256'")
+        valid_networks = [[64, 64], [256,256], [256,256,256]]
+        if args.net_arch in valid_networks:
+            arch = np.array(args.net_arch)
+        else: # invalid architecture    
+            print("Exiting: incorrect network architecture. example: ")
+            print("--net_arch 256 256 256")
             exit()
         
-        layer_size = shape[0] # assume the structure is equal sizing
-        self.dims = len(shape)
+        self.dims = len(arch)
         if self.dims == 2: # 64,64 or 256,256
             self.fc1 = nn.Linear(np.array(env.single_observation_space.shape).prod() + np.prod(env.single_action_space.shape), \
-                                layer_size)
-            self.fc2 = nn.Linear(layer_size, layer_size)
-            self.fc3 = nn.Linear(layer_size, 1)
+                                arch[0])
+            self.fc2 = nn.Linear(arch[0], arch[1])
+            self.fc3 = nn.Linear(arch[1], 1)
         elif self.dims == 3: # 256,256,256
             self.fc1 = nn.Linear(np.array(env.single_observation_space.shape).prod() + np.prod(env.single_action_space.shape), \
-                                 layer_size)
-            self.fc2 = nn.Linear(layer_size, layer_size)
-            self.fc3 = nn.Linear(layer_size, layer_size)
-            self.fc4 = nn.Linear(layer_size, 1)
-        else: # invalid
-            print("Exiting: incorrect network_struct inputed. Try: '64,64', '256,256', or '256,256,256'")
-            exit()
+                                 arch[0])
+            self.fc2 = nn.Linear(arch[0], arch[1])
+            self.fc3 = nn.Linear(arch[1], arch[2])
+            self.fc4 = nn.Linear(arch[2], 1)
+
     
     def forward(self, x, a):
         if self.dims == 2:
@@ -154,37 +153,22 @@ class QNetwork(nn.Module):
             x = F.relu(self.fc3(x))
             x = self.fc4(x)
             return x
-        
-        print("3 Exiting: incorrect network_struct inputed. Try: '64,64', '256,256', or '256,256,256'")
-        exit()
 
 
 class Actor(nn.Module):
     def __init__(self, env):
         super().__init__()
-        valid_networks = ['64,64', '256,256', '256,256,256']
-
-        if args.network_struct in valid_networks:
-            shape = np.fromstring(args.network_struct,dtype=np.int32,sep=',')
-        else: # invalid shape
-            print("4 Exiting: incorrect network_struct inputed. Try: '64,64', '256,256', or '256,256,256'")
-            exit()
-        
-        layer_size = shape[0] # assume the structure is equal sizing
-        self.dims = len(shape)
+        arch = np.array(args.net_arch)
+        self.dims = len(arch)
         if self.dims == 2: # 64,64 or 256,256
-            self.fc1 = nn.Linear(np.array(env.single_observation_space.shape).prod(), layer_size)
-            self.fc2 = nn.Linear(layer_size, layer_size)
-            self.fc_mu = nn.Linear(layer_size, np.prod(env.single_action_space.shape))
-
+            self.fc1 = nn.Linear(np.array(env.single_observation_space.shape).prod(), arch[0])
+            self.fc2 = nn.Linear(arch[0], arch[1])
+            self.fc_mu = nn.Linear(arch[1], np.prod(env.single_action_space.shape))
         elif self.dims == 3: # 256,256,256
-            self.fc1 = nn.Linear(np.array(env.single_observation_space.shape).prod(), layer_size)
-            self.fc2 = nn.Linear(layer_size, layer_size)
-            self.fc3 = nn.Linear(layer_size, layer_size)
-            self.fc_mu = nn.Linear(layer_size, np.prod(env.single_action_space.shape))
-        else: # invalid
-            print("Exiting: incorrect network_struct inputed. Try: '64,64', '256,256', or '256,256,256'")
-            exit()
+            self.fc1 = nn.Linear(np.array(env.single_observation_space.shape).prod(), arch[0])
+            self.fc2 = nn.Linear(arch[0], arch[1])
+            self.fc3 = nn.Linear(arch[1], arch[2])
+            self.fc_mu = nn.Linear(arch[2], np.prod(env.single_action_space.shape))
         
         # action rescaling
         self.register_buffer(
