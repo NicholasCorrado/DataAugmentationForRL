@@ -72,7 +72,6 @@ class Args:
     daf: Optional[str] = None
     alpha: float = 0.50
     aug_ratio: int = 16
-  
     net_arch: list[int] = (64, 64)  # Structure of the network, default 64,64
 
     def __post_init__(self):
@@ -117,7 +116,7 @@ def make_env(env_id, env_kwargs, seed, idx, capture_video, run_name):
 class QNetwork(nn.Module):
     def __init__(self, env):
         super().__init__()
-        valid_networks = [[64, 64], [256,256], [256,256,256]]
+        valid_networks = [(64, 64), (256,256), (256,256,256), [64,64], [256,256], [256,256,256]]
         if args.net_arch in valid_networks:
             arch = np.array(args.net_arch)
         else: # invalid architecture    
