@@ -116,7 +116,7 @@ def make_env(env_id, env_kwargs, seed, idx, capture_video, run_name):
 class QNetwork(nn.Module):
     def __init__(self, env):
         super().__init__()
-        valid_networks = [(64, 64), (256,256), (256,256,256), [64,64],[256,256], [256,256,256]]
+        valid_networks = [(64, 64), (256,256), (256,256,256), [64,64], [256,256], [256,256,256]]
         if args.net_arch in valid_networks:
             arch = np.array(args.net_arch)
         else: # invalid architecture    
