@@ -34,8 +34,7 @@ class Args:
     # experiment config
     torch_deterministic: bool = True # if toggled, `torch.backends.cudnn.deterministic=False`
     cuda: bool = True # if toggled, cuda will be enabled by default
-    env_id: str = "PandaPickAndPlace-v3" # environment id of the Atari game
-
+    env_id: str = "PandaPush-v3"
     env_kwargs: dict[str, Union[bool, float, str]] = field(default_factory=dict) 
     """
     usage: --env_kwargs arg1 val1 arg2 val2 arg3 val3
@@ -46,7 +45,7 @@ class Args:
     # env_kwargs: str = "arg1:one arg2:two" # additional keyword arguments to be passed to the env constructor
     total_timesteps: int = int(1e6)         # total timesteps of the experiments
     eval_freq: int = 10000                  # num of timesteps between policy evals
-    n_eval_episodes: int = 50               # num of eval episodes
+    n_eval_episodes: int = 80               # num of eval episodes
     seed: Optional[int] = None              # seed of the experiment
 
     run_id: Optional[int] = None
@@ -56,23 +55,23 @@ class Args:
     save_model: bool = False # whether to save model into the `runs/{run_name}` folder
 
     # Algorithm specific arguments
-    learning_rate: float = 3e-4     # learning rate of optimizer
-    buffer_size: int = int(2e6)     # replay memory buffer size
-    gamma: float = 0.99             # discount factor gamma
-    tau: float = 0.005              # target smoothing coefficient (default: 0.005)
-    batch_size: int = 512           # batch size of sample from the reply memory
-    exploration_noise: float = 0.1  # scale of exploration noise
+    learning_rate: float = 1e-3     # learning rate of optimizer
+    buffer_size: int = int(1e6)     # replay memory buffer size
+    gamma: float = 0.95             # discount factor gamma
+    tau: float = 0.05              # target smoothing coefficient (default: 0.005)
+    batch_size: int = 256           # batch size of sample from the reply memory
+    exploration_noise: float = 0.2  # scale of exploration noise
     # learning_starts: int = 0      # timestep to start learning
-    learning_starts: int = 25e3        # timestep to start learning
-    policy_frequency: int = 2       # frequency of training policy (delayed)
+    learning_starts: int = 1e3        # timestep to start learning
+    train_freq: int = 2       # frequency of training policy (delayed)
     noise_clip: float = 0.5         # noise clip parameter of the Target Policy Smoothing Regularization
-    random_action_prob: float = 0.0 # probability of sampling a random action
+    random_action_prob: float = 0.3 # probability of sampling a random action
 
     # DA hyperparams
     daf: Optional[str] = None
     alpha: float = 0.50
     aug_ratio: int = 16
-    net_arch: list[int] = (64, 64)  # Structure of the network, default 64,64
+    net_arch: list[int] = (256, 256, 256)  # Structure of the network, default 64,64
 
     def __post_init__(self):
         if self.save_subdir == None:
@@ -315,7 +314,8 @@ poetry run pip install "stable_baselines3==2.0.0a1"
 
         # ALGO LOGIC: training.
         alpha = 0.5 
-        if global_step > args.learning_starts:
+        if global_step > args.learning_starts and global_step % args.train_freq == 0:
+
             ###############
             # For a given alpha \in [0, 1] sample (1-alpha)*batch_size samples from the observed replay buffer and
             # alpha*batch_size samples from the augmented replay buffer.
@@ -351,24 +351,23 @@ poetry run pip install "stable_baselines3==2.0.0a1"
             qf1_loss.backward()
             q_optimizer.step()
 
-            if global_step % args.policy_frequency == 0:
-                actor_loss = -qf1(data.observations, actor(data.observations)).mean()
-                actor_optimizer.zero_grad()
-                actor_loss.backward()
-                actor_optimizer.step()
+            actor_loss = -qf1(data.observations, actor(data.observations)).mean()
+            actor_optimizer.zero_grad()
+            actor_loss.backward()
+            actor_optimizer.step()
 
-                # update the target network
-                for param, target_param in zip(actor.parameters(), target_actor.parameters()):
-                    target_param.data.copy_(args.tau * param.data + (1 - args.tau) * target_param.data)
-                for param, target_param in zip(qf1.parameters(), qf1_target.parameters()):
-                    target_param.data.copy_(args.tau * param.data + (1 - args.tau) * target_param.data)
+            # update the target network
+            for param, target_param in zip(actor.parameters(), target_actor.parameters()):
+                target_param.data.copy_(args.tau * param.data + (1 - args.tau) * target_param.data)
+            for param, target_param in zip(qf1.parameters(), qf1_target.parameters()):
+                target_param.data.copy_(args.tau * param.data + (1 - args.tau) * target_param.data)
 
-                if global_step % 1000 == 0:
-                    writer.add_scalar("losses/qf1_values", qf1_a_values.mean().item(), global_step)
-                    writer.add_scalar("losses/qf1_loss", qf1_loss.item(), global_step)
-                    writer.add_scalar("losses/actor_loss", actor_loss.item(), global_step)
-                    # print("SPS:", int(global_step / (time.time() - start_time)))
-                    writer.add_scalar("charts/SPS", int(global_step / (time.time() - start_time)), global_step)
+            if global_step % 1000 == 0:
+                writer.add_scalar("losses/qf1_values", qf1_a_values.mean().item(), global_step)
+                writer.add_scalar("losses/qf1_loss", qf1_loss.item(), global_step)
+                writer.add_scalar("losses/actor_loss", actor_loss.item(), global_step)
+                # print("SPS:", int(global_step / (time.time() - start_time)))
+                writer.add_scalar("charts/SPS", int(global_step / (time.time() - start_time)), global_step)
 
         if global_step % args.eval_freq == 0:
             evaluator.evaluate(global_step)
