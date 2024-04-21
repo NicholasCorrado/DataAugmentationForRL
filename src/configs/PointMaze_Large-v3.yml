@@ -1,0 +1,37 @@
+!!python/object:__main__.Args
+alpha: 0.5
+aug_ratio: 16
+batch_size: 64
+buffer_size: 1000000
+capture_video: false
+cuda: true
+daf: null
+env_id: PointMaze_Large-v3
+env_kwargs:
+  continuing_task: false
+eval_freq: 10000
+exp_name: ddpg
+exploration_noise: 0.1
+gamma: 0.99
+learning_rate: 0.0001
+learning_starts: 1000.0
+n_eval_episodes: 80
+net_arch:
+- 256
+- 256
+- 256
+noise_clip: 0.5
+random_action_prob: 0.3
+run_id: 40
+save_dir: results/PointMaze_Large-v3/ddpg/best_no_DA # rmvd /run_id part -> it gets overide in ddpg anyways?
+save_model: false
+save_rootdir: results
+save_subdir: best_no_DA
+seed: 2016563227
+tau: 0.05
+torch_deterministic: true
+total_timesteps: 1000000
+track: false
+train_freq: 2
+wandb_entity: null
+wandb_project_name: cleanRL
