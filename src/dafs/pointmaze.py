@@ -1,4 +1,5 @@
-from typing import List, Dict, Any
+import math
+from typing import List, Dict, Any, NamedTuple
 
 import numpy as np
 import gymnasium as gym
@@ -6,6 +7,13 @@ from gymnasium.wrappers import FlattenObservation
 from gymnasium_robotics.envs.maze import PointMazeEnv
 
 from src.dafs.base_daf import BaseDAF
+
+
+class Cell(NamedTuple):
+    xlo: int
+    xhi: int
+    ylo: int
+    yhi: int
 
 class TranslateRotate(BaseDAF):
     def __init__(self, env, **kwargs):
@@ -29,6 +37,22 @@ class TranslateRotate(BaseDAF):
                     self.wall_cells.append(np.array([i, j]))
         self.valid_cells = np.array(self.valid_cells)
 
+        self.cell_bounds = {}
+        for (r,c) in self.valid_cells:
+            xlo, ylo = -0.5, -0.5
+            xhi, yhi = +0.5, +0.5
+
+            if self.maze_map[r+1, c] == 1:
+                ylo = -0.39
+            if self.maze_map[r-1, c] == 1:
+                yhi = +0.39
+            if self.maze_map[r, c+1] == 1:
+                xhi = +0.39
+            if self.maze_map[r, c-1] == 1:
+                xlo = +0.39
+
+            self.cell_bounds[(r,c)] = Cell(xlo, xhi, ylo, yhi)
+
         self.thetas = np.array([0, np.pi/2, np.pi, np.pi*3/2])
         self.rotation_matrices = []
         for theta in self.thetas:
@@ -47,6 +71,15 @@ class TranslateRotate(BaseDAF):
         idx = np.random.randint(len(self.rotation_matrices))
         return self.rotation_matrices[idx]
 
+    def _is_valid_cell_pos(self, obs):
+        pos = np.expand_dims(obs[self.pos_mask], axis=0)
+        cell_rowcol = self._cell_xy_to_rowcol(pos)
+        cell_pos = self._cell_rowcol_to_xy(cell_rowcol)
+
+        if np.all(np.abs(pos - cell_pos) <= self.effective_cell_radius):
+            return True
+        return False
+
     def _is_valid(
             self,
             obs: np.ndarray,
@@ -56,11 +89,7 @@ class TranslateRotate(BaseDAF):
             terminated: np.ndarray,
             infos: List[Dict[str, Any]],
     ):
-        # @TODO
-        # pos = obs[:, self.pos_mask]
-        # new_pos = self._cell_xy_to_rowcol(pos)
-        return True
-
+        return self._is_valid_cell_pos(obs) and self._is_valid_cell_pos(next_obs)
 
     def _augment(
             self,
@@ -76,7 +105,7 @@ class TranslateRotate(BaseDAF):
 
         cell_rowcol = self._sample_valid_cells(aug_ratio)
         new_pos = self._cell_rowcol_to_xy(cell_rowcol)
-        new_pos += self._sample_xy_position_noise(cell_rowcol=cell_rowcol)
+        new_pos += self._sample_xy_position_noise(cell_rowcol=cell_rowcol, range=self.effective_cell_radius)
 
         # compute change in xy position (displacement)
         delta_pos = next_obs[:, self.pos_mask] - obs[:, self.pos_mask]
@@ -103,7 +132,7 @@ class TranslateRotate(BaseDAF):
         reward[:] = self.env.compute_reward(next_obs[:, self.achieved_goal_mask], next_obs[:, self.desired_goal_mask], {})
 
         # compute termination signal
-        terminated[:] = self.env.compute_terminated(next_obs[:, self.achieved_goal_mask], next_obs[:, self.desired_goal_mask], {})
+        terminated[:] = self.compute_terminated(next_obs[:, self.achieved_goal_mask], next_obs[:, self.desired_goal_mask], {})
 
     def _sample_valid_cells(self, n: int):
         idx = np.random.choice(len(self.valid_cells), size=(n,))
@@ -116,31 +145,30 @@ class TranslateRotate(BaseDAF):
 
         return np.hstack([x, y])
 
-    def _sample_xy_position_noise(self, cell_rowcol: np.ndarray) -> np.ndarray:
+    def _cell_xy_to_rowcol(self, xy_pos: np.ndarray) -> np.ndarray:
+        """Converts a cell x and y coordinates to `(i,j)`"""
+        i = np.floor((self.env.maze.y_map_center - xy_pos[:, [1]]) / self.env.maze.maze_size_scaling)
+        j = np.floor((xy_pos[:, [0]] + self.env.maze.x_map_center) / self.env.maze.maze_size_scaling)
+        return np.hstack([i, j])
+
+    def _sample_xy_position_noise(self, cell_rowcol: np.ndarray, range: float) -> np.ndarray:
         """Pass an x,y coordinate and it will return the same coordinate with a noise addition
         sampled from a uniform distribution
         """
-
-        # row, col = cell_rowcol[0], cell_rowcol[1]
-        # xlo, ylo = -self.effective_cell_radius, -self.effective_cell_radius
-        # xhi, yhi = +self.effective_cell_radius, +self.effective_cell_radius
-
-        # xlo, ylo = -0.5, -0.5
-        # xhi, yhi = +0.5, +0.5
-        #
-        # if self.env.maze.maze_map[row-1, col] == 1: # lower row -> larger y
-        #     yhi = +self.effective_cell_radius
-        # if self.env.maze.maze_map[row+1, col] == 1: # higher row -> smaller y
-        #     ylo = -self.effective_cell_radius
-        # if self.env.maze.maze_map[row, col+1] == 1: # lower col -> smaller x
-        #     xhi = +self.effective_cell_radius
-        # if self.env.maze.maze_map[row, col-1] == 1: # higher col -> larger x
-        #     xlo = -self.effective_cell_radius
-
-        xlo, ylo = -self.effective_cell_radius, -self.effective_cell_radius
-        xhi, yhi = +self.effective_cell_radius, +self.effective_cell_radius
+        xlo, ylo = -range, -range
+        xhi, yhi = range, range
 
         return np.random.uniform(low=[xlo, ylo], high=[xhi, yhi], size=(len(cell_rowcol), 2)) * self.env.maze.maze_size_scaling
+
+    def compute_terminated(
+        self, achieved_goal: np.ndarray, desired_goal: np.ndarray, info
+    ) -> bool:
+        if not self.env.continuing_task:
+            # If task is episodic terminate the episode when the goal is reached
+            return np.linalg.norm(achieved_goal - desired_goal) <= 0.45
+        else:
+            # Continuing tasks don't terminate, episode will be truncated when time limit is reached (`max_episode_steps`)
+            return False
 
 class RelabelGoal(TranslateRotate):
 
@@ -160,9 +188,9 @@ class RelabelGoal(TranslateRotate):
     ):
         cell_rowcol = self._sample_valid_cells(aug_ratio)
         new_goal = self._cell_rowcol_to_xy(cell_rowcol)
-        new_goal += self._sample_xy_position_noise(cell_rowcol=cell_rowcol)
+        new_goal += self._sample_xy_position_noise(cell_rowcol=cell_rowcol, range=0.25)
 
-        # relabel goal
+        # relabel goa1
         obs[:, self.desired_goal_mask] = new_goal
         next_obs[:, self.desired_goal_mask] = new_goal
 
@@ -170,7 +198,7 @@ class RelabelGoal(TranslateRotate):
         reward[:] = self.env.compute_reward(next_obs[:, self.achieved_goal_mask], next_obs[:, self.desired_goal_mask], {})
 
         # compute termination signal
-        terminated[:] = self.env.compute_terminated(next_obs[:, self.achieved_goal_mask], next_obs[:, self.desired_goal_mask], {})
+        terminated[:] = self.compute_terminated(next_obs[:, self.achieved_goal_mask], next_obs[:, self.desired_goal_mask], {})
 
 
 class TranslateRotateRelabelGoal(TranslateRotate):
@@ -194,7 +222,7 @@ class TranslateRotateRelabelGoal(TranslateRotate):
 
         cell_rowcol = self._sample_valid_cells(aug_ratio)
         new_goal = self._cell_rowcol_to_xy(cell_rowcol)
-        new_goal += self._sample_xy_position_noise(cell_rowcol=cell_rowcol)
+        new_goal += self._sample_xy_position_noise(cell_rowcol=cell_rowcol, range=0.25)
 
         # relabel goal
         obs[:, self.desired_goal_mask] = new_goal
@@ -204,7 +232,7 @@ class TranslateRotateRelabelGoal(TranslateRotate):
         reward[:] = self.env.compute_reward(next_obs[:, self.achieved_goal_mask], next_obs[:, self.desired_goal_mask], {})
 
         # compute termination signal
-        terminated[:] = self.env.compute_terminated(next_obs[:, self.achieved_goal_mask], next_obs[:, self.desired_goal_mask], {})
+        terminated[:] = self.compute_terminated(next_obs[:, self.achieved_goal_mask], next_obs[:, self.desired_goal_mask], {})
 
 
 def check_valid(env, obs, next_obs, action, reward, terminated, info):
@@ -250,8 +278,7 @@ if __name__ == "__main__":
     env = FlattenObservation(env)
 
     num_steps = int(1e4)
-    aug_func = TranslateRotateRelabelGoal(env)
-    # aug_func = RelabelGoal(env)
+    aug_func = RelabelGoal(env)
 
     for t in range(num_steps):
         obs, info = env.reset()
@@ -261,12 +288,13 @@ if __name__ == "__main__":
         aug_obs, aug_next_obs, aug_action, aug_reward, aug_terminated, aug_infos = aug_func.augment(
             obs, next_obs, action, reward, terminated, info, aug_ratio=1)
 
-        check_valid(env,
-                    obs=aug_obs[0],
-                    action=aug_action[0],
-                    reward=aug_reward[0],
-                    next_obs=aug_next_obs[0],
-                    terminated=aug_terminated[0],
-                    info=aug_infos[0])
+        if aug_obs is not None:
+            check_valid(env,
+                        obs=aug_obs[0],
+                        action=aug_action[0],
+                        reward=aug_reward[0],
+                        next_obs=aug_next_obs[0],
+                        terminated=aug_terminated[0],
+                        info=aug_infos[0])
 
 
