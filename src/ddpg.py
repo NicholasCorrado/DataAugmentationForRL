@@ -34,7 +34,7 @@ class Args:
     # experiment config
     torch_deterministic: bool = True # if toggled, `torch.backends.cudnn.deterministic=False`
     cuda: bool = True # if toggled, cuda will be enabled by default
-    env_id: str = "PandaPush-v3"
+    env_id: str = "PointMaze_UMaze-v3"
     env_kwargs: dict[str, Union[bool, float, str]] = field(default_factory=dict) 
     """
     usage: --env_kwargs arg1 val1 arg2 val2 arg3 val3
@@ -282,10 +282,8 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 actions += torch.normal(0, actor.action_scale * args.exploration_noise)
                 actions = actions.cpu().numpy().clip(envs.single_action_space.low, envs.single_action_space.high)
 
-        # print("actions ", actions)
         # TRY NOT TO MODIFY: execute the game and log data.
         next_obs, rewards, terminations, truncations, infos = envs.step(actions)
-
         # TRY NOT TO MODIFY: record rewards for plotting purposes
         if "final_info" in infos:
             for info in infos["final_info"]:
@@ -300,34 +298,26 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 real_next_obs[idx] = infos["final_observation"][idx]
         rb.add(obs, real_next_obs, actions, rewards, terminations, infos)
         
-        ###############
         # sample m augmented samples from a given DAF and append it to the augmented replay buffer
         if daf is not None:
             aug_obs, aug_next_obs, aug_action, aug_reward, aug_terminated, aug_infos = daf.augment(
                 obs, real_next_obs, actions, rewards, terminations, infos, aug_ratio=args.aug_ratio)
 
-            aug_rb.extend(aug_obs, aug_next_obs, aug_action, aug_reward, aug_terminated, aug_infos) # doesn't need truncated?
-        ##############
+            if aug_obs is not None:
+                aug_rb.extend(aug_obs, aug_next_obs, aug_action, aug_reward, aug_terminated, aug_infos) # doesn't need truncated?
 
         # TRY NOT TO MODIFY: CRUCIAL step easy to overlook
         obs = next_obs
 
         # ALGO LOGIC: training.
-        alpha = 0.5 
         if global_step > args.learning_starts and global_step % args.train_freq == 0:
 
-            ###############
             # For a given alpha \in [0, 1] sample (1-alpha)*batch_size samples from the observed replay buffer and
             # alpha*batch_size samples from the augmented replay buffer.
-            if daf is not None:
-                obs_data_size = int((1 - args.alpha) * args.batch_size) # must be int, not float
-                obs_data = rb.sample(obs_data_size)
-                # data += aug_rb.sample(int(args.alpha * args.batch_size))
+            if daf is not None and aug_rb.size() > 0:
+                obs_data = rb.sample(int((1 - args.alpha) * args.batch_size))
                 aug_data = aug_rb.sample(int(args.alpha * args.batch_size))
-                # data += aug_data
-                # data = rb.sample(args.batch_size)
-                # data.add(aug_rb.observations[0], aug_rb.observations[1], aug_rb.actions[0],\
-                #         aug_rb.rewards[0], aug_rb.done: np.ndarray)
+
                 observations = torch.concat((obs_data.observations, aug_data.observations))
                 actions = torch.concat((obs_data.actions, aug_data.actions))
                 next_observations = torch.concat((obs_data.next_observations, aug_data.next_observations))
