@@ -72,7 +72,7 @@ class TranslateRotate(BaseDAF):
         return self.rotation_matrices[idx]
 
     def _is_valid_cell_pos(self, obs):
-        pos = np.expand_dims(obs[self.pos_mask], axis=0)
+        pos = obs[:, self.pos_mask]
         cell_rowcol = self._cell_xy_to_rowcol(pos)
         cell_pos = self._cell_rowcol_to_xy(cell_rowcol)
 
@@ -165,7 +165,7 @@ class TranslateRotate(BaseDAF):
     ) -> bool:
         if not self.env.continuing_task:
             # If task is episodic terminate the episode when the goal is reached
-            return np.linalg.norm(achieved_goal - desired_goal) <= 0.45
+            return np.linalg.norm(achieved_goal - desired_goal, axis=-1) <= 0.45
         else:
             # Continuing tasks don't terminate, episode will be truncated when time limit is reached (`max_episode_steps`)
             return False
@@ -285,8 +285,15 @@ if __name__ == "__main__":
 
         action = env.action_space.sample()
         next_obs, reward, terminated, truncated, info = env.step(action)
+
+        obs = np.expand_dims(obs, axis=0)
+        action = np.expand_dims(action, axis=0)
+        reward = np.expand_dims(reward, axis=0)
+        next_obs = np.expand_dims(next_obs, axis=0)
+        terminated = np.expand_dims(terminated, axis=0)
+
         aug_obs, aug_next_obs, aug_action, aug_reward, aug_terminated, aug_infos = aug_func.augment(
-            obs, next_obs, action, reward, terminated, info, aug_ratio=1)
+            obs, next_obs, action, reward, terminated, info, aug_ratio=4)
 
         if aug_obs is not None:
             check_valid(env,

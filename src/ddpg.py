@@ -57,10 +57,10 @@ class Args:
     # Algorithm specific arguments
     learning_rate: float = 1e-3     # learning rate of optimizer
     buffer_size: int = int(1e6)     # replay memory buffer size
-    gamma: float = 0.95             # discount factor gamma
-    tau: float = 0.05              # target smoothing coefficient (default: 0.005)
+    gamma: float = 0.99             # discount factor gamma
+    tau: float = 0.005              # target smoothing coefficient (default: 0.005)
     batch_size: int = 256           # batch size of sample from the reply memory
-    exploration_noise: float = 0.2  # scale of exploration noise
+    exploration_noise: float = 0.1  # scale of exploration noise
     # learning_starts: int = 0      # timestep to start learning
     learning_starts: int = 1e3        # timestep to start learning
     train_freq: int = 2       # frequency of training policy (delayed)
