@@ -1,4 +1,4 @@
-!!python/object:__main__.Args
+# !!python/object:__main__.Args
 alpha: 0.5
 aug_ratio: 16
 batch_size: 64

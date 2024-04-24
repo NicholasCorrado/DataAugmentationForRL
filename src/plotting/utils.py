@@ -1,6 +1,5 @@
 import os
 import warnings
-
 import numpy as np
 
 
@@ -136,27 +135,12 @@ def plot(save_dict, name, m=100000, success_threshold=None, return_cutoff=-np.in
     # return fig
 
 
-# def get_paths(results_dir, key, n_trials=20):
-#
-#     path_dict = {}
-#     path_dict[key] = []
-#     for j in range(n_trials):
-#         path_dict[key].append(f'./{results_dir}/run_{j+1}/evaluations.npz')
-#     return path_dict
-
 def get_paths(results_dir, filename='evaluations.npz'):
     paths = []
     for subdir in os.listdir(results_dir):
         if 'run_' in subdir:
             paths.append(f'{results_dir}/{subdir}/{filename}')
     return paths
-
-    # path_dict = {}
-    # for subdir in os.listdir(results_dir):
-    #     if 'run_' in subdir:
-    #         path_dict[key]['paths'].append(f'{results_dir}/{subdir}/{filename}.npz')
-    #         path_dict[key]['specs'] = specs
-    # return path_dict
 
 
 def get_data(results_dir, field_name='returns', filename='evaluations.npz'):
@@ -183,4 +167,3 @@ def get_data(results_dir, field_name='returns', filename='evaluations.npz'):
             timesteps = data['timesteps']
 
     return timesteps, np.array(results)
-
