@@ -1,0 +1,2 @@
+5,10,python3*ddpg.py*--env_id*PandaPush-v3
+5,10,python3*ddpg.py*--env_id*PandaSlide-v3
