@@ -3,7 +3,8 @@ import os
 import numpy as np
 
 import matplotlib
-matplotlib.use('TkAgg')
+# matplotlib.use('TkAgg')
+matplotlib.use('Agg')
 from matplotlib import pyplot as plt
 import seaborn
 
@@ -25,14 +26,14 @@ if __name__ == "__main__":
     fig, axs = plt.subplots(nrows=nrows, ncols=ncols, figsize=(ncols*3, nrows*3))
     axs = axs.flatten()
 
-    env_ids = ['Swimmer-v4', 'Hopper-v4', 'HalfCheetah-v4', 'Walker2d-v4', 'Ant-v4', 'Humanoid-v4']
+    env_ids = ['PointMaze_UMaze-v3']
     algos = ['ddpg']
 
     for env_id, ax in zip(env_ids, axs):
         # add all results you want to plot on a single subplot
         results_dict = {}
         for algo in algos:
-            results_dir = f"../results/{env_id}/{algo}"
+            results_dir = f"../results/train/results/{env_id}/{algo}/No_DA"
             timesteps, results = get_data(results_dir=results_dir)
 
             # A warning will be raised when we fail to load from `results_dir`. Skip these failures.
