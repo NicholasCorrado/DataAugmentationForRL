@@ -89,7 +89,9 @@ class TranslateRotate(BaseDAF):
             terminated: np.ndarray,
             infos: List[Dict[str, Any]],
     ):
-        return self._is_valid_cell_pos(obs) and self._is_valid_cell_pos(next_obs)
+
+        return True
+        # return self._is_valid_cell_pos(obs) and self._is_valid_cell_pos(next_obs)
 
     def _augment(
             self,

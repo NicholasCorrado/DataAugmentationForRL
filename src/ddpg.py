@@ -58,7 +58,7 @@ class Args:
     learning_rate: float = 1e-3     # learning rate of optimizer
     buffer_size: int = int(1e6)     # replay memory buffer size
     gamma: float = 0.99             # discount factor gamma
-    tau: float = 0.005              # target smoothing coefficient (default: 0.005)
+    tau: float = 0.05              # target smoothing coefficient (default: 0.005)
     batch_size: int = 256           # batch size of sample from the reply memory
     exploration_noise: float = 0.1  # scale of exploration noise
     # learning_starts: int = 0      # timestep to start learning
@@ -269,6 +269,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
     evaluator = Evaluator(actor, eval_env, args.save_dir, n_eval_episodes=args.n_eval_episodes)
 
     start_time = time.time()
+    num_updates = 0
 
     # TRY NOT TO MODIFY: start the game
     obs, _ = envs.reset(seed=args.seed)
@@ -311,7 +312,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
 
         # ALGO LOGIC: training.
         if global_step > args.learning_starts and global_step % args.train_freq == 0:
-
+            num_updates += 1
             # For a given alpha \in [0, 1] sample (1-alpha)*batch_size samples from the observed replay buffer and
             # alpha*batch_size samples from the augmented replay buffer.
             if daf is not None and aug_rb.size() > 0:
@@ -360,7 +361,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 writer.add_scalar("charts/SPS", int(global_step / (time.time() - start_time)), global_step)
 
         if global_step % args.eval_freq == 0:
-            evaluator.evaluate(global_step)
+            evaluator.evaluate(global_step, num_updates=num_updates)
 
 
     if args.save_model:
