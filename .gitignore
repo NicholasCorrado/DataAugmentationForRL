@@ -1,3 +1,6 @@
+*gitignore
+chtc_results/*
+src/plotting/*
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

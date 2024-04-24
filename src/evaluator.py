@@ -31,19 +31,22 @@ class Evaluator:
         self.eval_returns = []
         self.eval_timesteps = []
         self.eval_successes = []
+        self.eval_updates = []
 
-    def evaluate(self, timestep):
+    def evaluate(self, timestep, num_updates):
         returns, successes = self._evaluate()
 
         self.eval_timesteps.append(timestep)
         self.eval_returns.append(returns)
         self.eval_successes.append(successes)
+        self.eval_updates.append(num_updates)
 
         np.savez(
             self.save_path,
             timesteps=self.eval_timesteps,
             returns=self.eval_returns,
             successes=self.eval_successes,
+            updates=self.eval_updates,
         )
 
         mean_reward, std_reward = np.mean(returns), np.std(returns)
