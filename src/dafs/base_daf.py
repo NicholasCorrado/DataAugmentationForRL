@@ -98,7 +98,7 @@ class BaseDAF:
 
         # If the input is not a valid for the given DAF, return None.
         if not self._is_valid(obs, next_obs, action, reward, terminated, infos):
-            return None
+            return None, None, None, None, None, None
 
         aug_transition = \
             self._deepcopy_transition(obs, next_obs, action, reward, terminated, infos, aug_ratio=aug_ratio)
