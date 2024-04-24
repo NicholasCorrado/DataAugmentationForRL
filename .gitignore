@@ -1,3 +1,7 @@
+# chtc specific files
+src/gen_commands_*
+src/packages.tar.gz
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
