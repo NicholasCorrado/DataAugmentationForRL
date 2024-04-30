@@ -17,7 +17,7 @@ transfer_output_files = results_$(Process).tar.gz
 
 #+IsBuildJob = true
 # Indicate which version of Linux (CentOS) you want to build your packages on
-requirements = (Target.HasCHTCStaging == true) && (OpSysMajorVer =?= 8)
+requirements = (Target.HasCHTCStaging == true)
 request_cpus = 1
 request_memory = $(mem)GB
 request_disk = $(disk)GB

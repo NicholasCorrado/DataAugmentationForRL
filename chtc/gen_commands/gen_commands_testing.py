@@ -14,8 +14,8 @@ def gen_command(env_id):
     return command
 
 if __name__ == "__main__":
-    os.makedirs('commands', exist_ok=True)
-    f = open(f"commands/testing.txt", "w")
+    os.makedirs('../commands', exist_ok=True)
+    f = open(f"../commands/testing.txt", "w")
 
     env_ids = ['PandaPush-v3', 'PandaSlide-v3']
     for env in env_ids:

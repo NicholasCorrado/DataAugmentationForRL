@@ -47,8 +47,8 @@ def gen_command_more(env_id, daf, batch_size, subdir, buffer_size, train_freq, t
     return command
 
 if __name__ == "__main__":
-    os.makedirs('commands', exist_ok=True)
-    f = open(f"commands/train_panda.txt", "w")
+    os.makedirs('../commands', exist_ok=True)
+    f = open(f"../commands/train_panda.txt", "w")
 
     env_ids = ['PandaPush-v3', 'PandaSlide-v3']
     daf = 'RelabelGoal'

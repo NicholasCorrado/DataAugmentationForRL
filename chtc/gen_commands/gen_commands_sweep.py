@@ -61,8 +61,8 @@ def gen_command_net(env_id, learning_rate, batch_size, network, network_subdir):
 
 if __name__ == "__main__":
 
-    os.makedirs('commands', exist_ok=True)
-    f = open(f"commands/train_ant_sweep.txt", "w")
+    os.makedirs('../commands', exist_ok=True)
+    f = open(f"../commands/train_ant_sweep.txt", "w")
     
     # env_ids = ['PointMaze_UMaze-v3', 'PointMaze_Medium-v3', 'PointMaze_Large-v3']
     # pointmaze_dafs = ['RelabelGoal', 'TranslateRotate', 'TranslateRotateRelabelGoal']
