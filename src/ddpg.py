@@ -71,7 +71,7 @@ class Args:
     # DA hyperparams
     daf: Optional[str] = None
     alpha: float = 0.50
-    aug_ratio: int = 16
+    aug_ratio: int = 1
     aug_buffer_size: Optional[int] = None   # augmented data buffer size
 
 
