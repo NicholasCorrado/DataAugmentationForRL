@@ -55,9 +55,9 @@ class Args:
     save_model: bool = False # whether to save model into the `runs/{run_name}` folder
 
     # Algorithm specific arguments
+    net_arch: list[int] = (256, 256, 256)  # Structure of the network, default 64,64
     learning_rate: float = 1e-3     # learning rate of optimizer
     buffer_size: int = int(1e6)     # replay memory buffer size
-    aug_buffer_size: Optional[int] = None   # augmented data buffer size
     gamma: float = 0.99             # discount factor gamma
     tau: float = 0.05               # target smoothing coefficient (default: 0.005)
     batch_size: int = 256           # batch size of sample from the reply memory
@@ -72,7 +72,8 @@ class Args:
     daf: Optional[str] = None
     alpha: float = 0.50
     aug_ratio: int = 16
-    net_arch: list[int] = (256, 256, 256)  # Structure of the network, default 64,64
+    aug_buffer_size: Optional[int] = None   # augmented data buffer size
+
 
     def __post_init__(self):
         if self.save_subdir == None:
