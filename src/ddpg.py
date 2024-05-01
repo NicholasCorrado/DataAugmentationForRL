@@ -57,13 +57,14 @@ class Args:
     # Algorithm specific arguments
     learning_rate: float = 1e-3     # learning rate of optimizer
     buffer_size: int = int(1e6)     # replay memory buffer size
+    aug_buffer_size: Optional[int] = None   # augmented data buffer size
     gamma: float = 0.99             # discount factor gamma
-    tau: float = 0.05              # target smoothing coefficient (default: 0.005)
+    tau: float = 0.05               # target smoothing coefficient (default: 0.005)
     batch_size: int = 256           # batch size of sample from the reply memory
     exploration_noise: float = 0.1  # scale of exploration noise
     # learning_starts: int = 0      # timestep to start learning
-    learning_starts: int = 1e3        # timestep to start learning
-    train_freq: int = 2       # frequency of training policy (delayed)
+    learning_starts: int = 1e3      # timestep to start learning
+    train_freq: int = 2             # frequency of training policy (delayed)
     noise_clip: float = 0.5         # noise clip parameter of the Target Policy Smoothing Regularization
     random_action_prob: float = 0.3 # probability of sampling a random action
 
@@ -251,19 +252,22 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         handle_timeout_termination=False,
     )
     
-    # @TODO: Initialize empty replay buffer for augmented data
-    if args.daf is not None:
+    if args.daf is not None and args.aug_buffer_size == None:
+        print("Missing aug_buffer_size when daf is given")
+        exit()
+
+    if args.daf is not None: # if we have a daf, make the separate aug_rb
         daf = DAFS[args.env_id][args.daf](env=envs.envs[0])
+        aug_rb = ReplayBuffer(
+            args.aug_buffer_size,
+            envs.single_observation_space,
+            envs.single_action_space,
+            device,
+            handle_timeout_termination=False,
+        )
     else:
         daf = None
-
-    aug_rb = ReplayBuffer(
-        args.buffer_size,
-        envs.single_observation_space,
-        envs.single_action_space,
-        device,
-        handle_timeout_termination=False,
-    )
+        aug_rb = None
 
     eval_env = gym.vector.SyncVectorEnv([make_env(args.env_id, args.env_kwargs, 0, 0, False, run_name)])
     evaluator = Evaluator(actor, eval_env, args.save_dir, n_eval_episodes=args.n_eval_episodes)

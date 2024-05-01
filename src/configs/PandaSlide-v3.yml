@@ -1,7 +1,7 @@
 !!python/object:__main__.Args
 alpha: 0.5
 aug_ratio: 16
-batch_size: 512
+batch_size: 256
 buffer_size: 2000000
 capture_video: false
 cuda: true
