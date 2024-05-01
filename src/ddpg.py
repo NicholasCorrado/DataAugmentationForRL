@@ -304,12 +304,12 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         rb.add(obs, real_next_obs, actions, rewards, terminations, infos)
         
         # sample m augmented samples from a given DAF and append it to the augmented replay buffer
-        if daf is not None:
+        if daf is not None and aug_rb is not None:
             aug_obs, aug_next_obs, aug_action, aug_reward, aug_terminated, aug_infos = daf.augment(
                 obs, real_next_obs, actions, rewards, terminations, infos, aug_ratio=args.aug_ratio)
 
             if aug_obs is not None:
-                aug_rb.extend(aug_obs, aug_next_obs, aug_action, aug_reward, aug_terminated, aug_infos) # doesn't need truncated?
+                aug_rb.extend(aug_obs, aug_next_obs, aug_action, aug_reward, aug_terminated, aug_infos)
 
         # TRY NOT TO MODIFY: CRUCIAL step easy to overlook
         obs = next_obs
