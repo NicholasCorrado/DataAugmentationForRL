@@ -1,4 +1,4 @@
-commands_file=gen_commands/commands/${1}.txt
+commands_file=commands/${1}.txt
 results_dir=results/${1}
 mkdir -p ${results_dir}
 mkdir -p ${results_dir}/logs
