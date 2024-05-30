@@ -28,8 +28,8 @@ def gen_command_best(env_id, daf, timesteps, subdir):
     return command
 
 if __name__ == "__main__":
-    os.makedirs('commands', exist_ok=True)
-    f = open(f"commands/train_maze.txt", "w")
+    os.makedirs('../commands', exist_ok=True)
+    f = open(f"../commands/train_maze.txt", "w")
     
     env_ids = ['PointMaze_UMaze-v3', 'PointMaze_Medium-v3', 'PointMaze_Large-v3']
     pointmaze_dafs = ['RelabelGoal', 'TranslateRotate', 'TranslateRotateRelabelGoal']

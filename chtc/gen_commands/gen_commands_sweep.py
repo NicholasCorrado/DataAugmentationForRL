@@ -79,8 +79,8 @@ def gen_command_tau(env_id, learning_rate, tau):
 
 if __name__ == "__main__":
 
-    os.makedirs('commands', exist_ok=True)
-    f = open(f"commands/train_ant_sweep.txt", "w")
+    os.makedirs('../commands', exist_ok=True)
+    f = open(f"../commands/train_ant_sweep.txt", "w")
     
     # pointmaze_dafs = ['RelabelGoal', 'TranslateRotate', 'TranslateRotateRelabelGoal']
     batch_sizes = [64, 128, 256]
