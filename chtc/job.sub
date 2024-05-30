@@ -1,6 +1,8 @@
 # Python build file
 
-universe = vanilla
+#universe = vanilla
+universe = container
+container_image = docker://python:3.10
 
 executable = job.sh
 initial_dir = $(results_dir)
