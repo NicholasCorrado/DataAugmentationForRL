@@ -1,21 +1,22 @@
 import os
 '''
-Hyperparam sweep for AntMaze_{UMaze, Medium, Large}-v3, 5 seeds
+Hyperparam sweep for PointMaze_{UMaze, Medium, Large}-v3, 5 seeds 
 '''
 
-# python3 ddpg.py --env_id PandaSlide-v3 --daf RelabelGoal --save_subdir 2xTranslateGoal 
-
-def gen_command_best(env_id, daf, timesteps, aug_r, subdir):
+def gen_command_best(env_id, daf, timesteps, aug_r, subdir): # most recent change train_freq=1
     python_command = f'python3 ddpg.py --env_id {env_id} ' \
+                    f'--train_freq 1 ' \
                     f'--gamma 0.99 ' \
+                    f'--alpha 0.5 ' \
                     f'--exploration_noise 0.1 ' \
-                    f'--learning_rate 1e-4 ' \
+                    f'--learning_rate 0.0001 ' \
                     f'--batch_size 64 ' \
                     f'--net_arch 256 256 256 ' \
-                    f'--aug_ratio {aug_r} ' \
                     f'--save_subdir {subdir} ' \
                     f'--total_timesteps {timesteps} ' \
                     f'--env_kwargs continuing_task False ' 
+    if aug_r != None:
+        python_command = python_command + f'--aug_ratio {aug_r} ' 
     if daf != None:
         python_command = python_command + f'--daf {daf} ' 
         python_command = python_command + f'--buffer_size {int(2e6)}' # x2 buffer
@@ -49,25 +50,7 @@ def gen_command_net(env_id, learning_rate, batch_size, network, network_subdir):
                     f'--learning_rate {learning_rate} ' \
                     f'--batch_size {batch_size} ' \
                     f'--net_arch {network} ' \
-                    f'--save_subdir lr_{learning_rate}/tau_ ' \
-                    f'--env_kwargs continuing_task False ' \
-                    f'--total_timesteps 1000000 ' \
-                    f'--buffer_size {int(1e6)}'
-
-    mem = 10
-    disk = 10
-    command = f"{mem},{disk},{python_command}"
-    return command
-
-# 4/28
-def gen_command_tau(env_id, learning_rate, tau):
-    python_command = f'python3 ddpg.py --env_id {env_id} ' \
-                    f'--random_action_prob 0 ' \
-                    f'--learning_starts 10000 ' \
-                    f'--learning_rate {learning_rate} ' \
-                    f'--batch_size 64 ' \
-                    f'--net_arch 256 256 256 ' \
-                    f'--save_subdir lr_{learning_rate}/tau_{tau} ' \
+                    f'--save_subdir lr_{learning_rate}_batch_{batch_size}/network_{network_subdir} ' \
                     f'--env_kwargs continuing_task False ' \
                     f'--total_timesteps 1000000 ' \
                     f'--buffer_size {int(1e6)}'
@@ -79,19 +62,18 @@ def gen_command_tau(env_id, learning_rate, tau):
 
 if __name__ == "__main__":
 
-    os.makedirs('../commands', exist_ok=True)
-    f = open(f"../commands/train_ant_sweep.txt", "w")
+    os.makedirs('commands', exist_ok=True)
+    f = open(f"commands/pointmaze_ar_sweep.txt", "w")
     
-    # pointmaze_dafs = ['RelabelGoal', 'TranslateRotate', 'TranslateRotateRelabelGoal']
+    env_ids = ['PointMaze_UMaze-v3', 'PointMaze_Medium-v3', 'PointMaze_Large-v3']
+    pointmaze_dafs = ['RelabelGoal', 'TranslateRotate', 'TranslateRotateRelabelGoal']
+    learning_rates = [1e-3, 1e-4]
     batch_sizes = [64, 128, 256]
 
     # env_ids = ['AntMaze_UMaze-v4', 'AntMaze_Medium-v4', 'AntMaze_Large-v4']
-    env_ids = ['AntMaze_UMaze-v4', 'AntMaze_UMazeDense-v4']
-    # pointmaze_dafs = ['RelabelGoal']
     # buff = 2e6
-    # aug_ratios = [1,2,4,8,16]
+    aug_ratios = [1,4,8,16]
     # alpha = 0.5 # fixed alpha
-    timesteps = 1000000
     net_archs = ["64 64", "256 256", "256 256 256"]
     net_arch_str = ["64,64", "256,256", "256,256,256"]
 
@@ -106,18 +88,35 @@ if __name__ == "__main__":
     #             for network, subdir in zip(net_archs,net_arch_str):
     #                 command = gen_command_net(env_id, lr, batch, network, subdir)
     #                 print(command)
-    #                 f.write(command.replace(' ', '*') + "\n")
+                    # f.write(command.replace(' ', '*') + "\n")
 
-    # lr + tau sweep
-    learning_rates = [1e-4, 1e-5]
-    taus= [0.05, 0.005]
-    env_ids = ['AntMaze_UMaze-v4', 'AntMaze_UMazeDense-v4']
+    # sweep aug_r
+    for daf in pointmaze_dafs:
+        for aug_r in aug_ratios:
+            directory = daf+'/tf_1/ar_'+str(aug_r)
+            command = gen_command_best('PointMaze_UMaze-v3', daf=daf, timesteps=300000, aug_r=aug_r, \
+                                        subdir=directory)
+            print(command)
+            f.write(command.replace(' ', '*') + "\n")
+            # also add a run without any DA: I'm too lazy to copy and paste 
+            # so I'll make a no_DA run for every daf
+            directory = daf+'/tf_1/no_DA'
+            command = gen_command_best('PointMaze_UMaze-v3', daf=None, timesteps=300000, aug_r=None, subdir=directory)
+            print(command)
+            f.write(command.replace(' ', '*') + "\n")
 
-    for env_id in env_ids: 
-        for lr  in learning_rates:
-            for tau in taus:
-                command = gen_command_tau(env_id, lr, tau)
+    timesteps = 1000000
+    for env_id in env_ids[1:]: 
+        for daf in pointmaze_dafs:
+            for aug_r in aug_ratios:
+                directory = daf+'/tf_1/ar_'+str(aug_r)
+                command = gen_command_best(env_id, daf=daf, timesteps=timesteps, aug_r=aug_r, \
+                                            subdir=directory)
                 print(command)
                 f.write(command.replace(' ', '*') + "\n")
-
-    
+            
+            # run without DA:
+            directory = daf+'/tf_1/no_DA'
+            command = gen_command_best(env_id, daf=None, timesteps=timesteps, aug_r=None, subdir=directory)
+            print(command)
+            f.write(command.replace(' ', '*') + "\n")

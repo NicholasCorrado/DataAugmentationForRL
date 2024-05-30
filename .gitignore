@@ -1,4 +1,5 @@
 # chtc specific files
+src/job_packages.*
 src/gen_commands_*
 src/packages.tar.gz
 *gitignore
