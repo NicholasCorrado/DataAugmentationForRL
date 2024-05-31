@@ -11,4 +11,6 @@ pip install gymnasium panda-gym torch tyro pyyaml stable-baselines3 tensorboard 
 
 ```commandline
 python ddpg.py --env_id Hopper-v4 --total_timesteps 1000000 --eval_freq 10000 
+python sac.py --env_id Hopper-v4 --total_timesteps 1000000 --eval_freq 10000 
+python td3.py --env_id Hopper-v4 --total_timesteps 1000000 --eval_freq 10000 
 ```
