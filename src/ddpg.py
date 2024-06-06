@@ -44,7 +44,7 @@ class Args:
     """
     # env_kwargs: str = "arg1:one arg2:two" # additional keyword arguments to be passed to the env constructor
     total_timesteps: int = int(1e6)         # total timesteps of the experiments
-    eval_freq: int = 10000                  # num of timesteps between policy evals
+    eval_freq: Optional[int] = None         # num of timesteps between policy evals
     n_eval_episodes: int = 80               # num of eval episodes
     seed: Optional[int] = None              # seed of the experiment
 
@@ -59,14 +59,15 @@ class Args:
     learning_rate: float = 1e-3     # learning rate of optimizer
     buffer_size: int = int(1e6)     # replay memory buffer size
     gamma: float = 0.99             # discount factor gamma
-    tau: float = 0.05               # target smoothing coefficient (default: 0.005)
+    tau: float = 0.005               # target smoothing coefficient (default: 0.005)
     batch_size: int = 256           # batch size of sample from the reply memory
     exploration_noise: float = 0.1  # scale of exploration noise
     # learning_starts: int = 0      # timestep to start learning
-    learning_starts: int = 1e3      # timestep to start learning
-    train_freq: int = 2             # frequency of training policy (delayed)
+    learning_starts: int = 1e4      # timestep to start learning
+    train_freq: int = 1             # frequency of training policy (delayed)
     noise_clip: float = 0.5         # noise clip parameter of the Target Policy Smoothing Regularization
-    random_action_prob: float = 0.3 # probability of sampling a random action
+    random_action_prob: float = 0   # probability of sampling a random action
+    updates_per_step: int = 1      # replaces train_freq, for now ignore inc RR of just real data.
 
     # DA hyperparams
     daf: Optional[str] = None
@@ -76,6 +77,10 @@ class Args:
 
 
     def __post_init__(self):
+        if self.eval_freq == None: 
+            # 20 evals per training run unless specified otherwise.
+            self.eval_freq = self.total_timesteps/20
+
         if self.save_subdir == None:
             self.save_dir = f"{self.save_rootdir}/{self.env_id}/ddpg"
         else:
@@ -317,53 +322,54 @@ poetry run pip install "stable_baselines3==2.0.0a1"
 
         # ALGO LOGIC: training.
         if global_step > args.learning_starts and global_step % args.train_freq == 0:
-            num_updates += 1
-            # For a given alpha \in [0, 1] sample (1-alpha)*batch_size samples from the observed replay buffer and
-            # alpha*batch_size samples from the augmented replay buffer.
-            if daf is not None and aug_rb.size() > 0:
-                obs_data = rb.sample(int((1 - args.alpha) * args.batch_size))
-                aug_data = aug_rb.sample(int(args.alpha * args.batch_size))
+            for i in range(args.updates_per_step):
+                num_updates += 1
+                # For a given alpha \in [0, 1] sample (1-alpha)*batch_size samples from the observed replay buffer and
+                # alpha*batch_size samples from the augmented replay buffer.
+                if daf is not None and aug_rb.size() > 0:
+                    obs_data = rb.sample(int((1 - args.alpha) * args.batch_size))
+                    aug_data = aug_rb.sample(int(args.alpha * args.batch_size))
 
-                observations = torch.concat((obs_data.observations, aug_data.observations))
-                actions = torch.concat((obs_data.actions, aug_data.actions))
-                next_observations = torch.concat((obs_data.next_observations, aug_data.next_observations))
-                rewards = torch.concat((obs_data.rewards, aug_data.rewards))
-                dones = torch.concat((obs_data.dones, aug_data.dones))
+                    observations = torch.concat((obs_data.observations, aug_data.observations))
+                    actions = torch.concat((obs_data.actions, aug_data.actions))
+                    next_observations = torch.concat((obs_data.next_observations, aug_data.next_observations))
+                    rewards = torch.concat((obs_data.rewards, aug_data.rewards))
+                    dones = torch.concat((obs_data.dones, aug_data.dones))
 
-                data = ReplayBufferSamples(observations, actions, next_observations, dones, rewards)
-            ##############
-            else:
-                data = rb.sample(args.batch_size)
-            with torch.no_grad():
-                next_state_actions = target_actor(data.next_observations)
-                qf1_next_target = qf1_target(data.next_observations, next_state_actions)
-                next_q_value = data.rewards.flatten() + (1 - data.dones.flatten()) * args.gamma * (qf1_next_target).view(-1)
+                    data = ReplayBufferSamples(observations, actions, next_observations, dones, rewards)
+                ##############
+                else:
+                    data = rb.sample(args.batch_size)
+                with torch.no_grad():
+                    next_state_actions = target_actor(data.next_observations)
+                    qf1_next_target = qf1_target(data.next_observations, next_state_actions)
+                    next_q_value = data.rewards.flatten() + (1 - data.dones.flatten()) * args.gamma * (qf1_next_target).view(-1)
 
-            qf1_a_values = qf1(data.observations, data.actions).view(-1)
-            qf1_loss = F.mse_loss(qf1_a_values, next_q_value)
+                qf1_a_values = qf1(data.observations, data.actions).view(-1)
+                qf1_loss = F.mse_loss(qf1_a_values, next_q_value)
 
-            # optimize the model
-            q_optimizer.zero_grad()
-            qf1_loss.backward()
-            q_optimizer.step()
+                # optimize the model
+                q_optimizer.zero_grad()
+                qf1_loss.backward()
+                q_optimizer.step()
 
-            actor_loss = -qf1(data.observations, actor(data.observations)).mean()
-            actor_optimizer.zero_grad()
-            actor_loss.backward()
-            actor_optimizer.step()
+                actor_loss = -qf1(data.observations, actor(data.observations)).mean()
+                actor_optimizer.zero_grad()
+                actor_loss.backward()
+                actor_optimizer.step()
 
-            # update the target network
-            for param, target_param in zip(actor.parameters(), target_actor.parameters()):
-                target_param.data.copy_(args.tau * param.data + (1 - args.tau) * target_param.data)
-            for param, target_param in zip(qf1.parameters(), qf1_target.parameters()):
-                target_param.data.copy_(args.tau * param.data + (1 - args.tau) * target_param.data)
+                # update the target network
+                for param, target_param in zip(actor.parameters(), target_actor.parameters()):
+                    target_param.data.copy_(args.tau * param.data + (1 - args.tau) * target_param.data)
+                for param, target_param in zip(qf1.parameters(), qf1_target.parameters()):
+                    target_param.data.copy_(args.tau * param.data + (1 - args.tau) * target_param.data)
 
-            if global_step % 1000 == 0:
-                writer.add_scalar("losses/qf1_values", qf1_a_values.mean().item(), global_step)
-                writer.add_scalar("losses/qf1_loss", qf1_loss.item(), global_step)
-                writer.add_scalar("losses/actor_loss", actor_loss.item(), global_step)
-                # print("SPS:", int(global_step / (time.time() - start_time)))
-                writer.add_scalar("charts/SPS", int(global_step / (time.time() - start_time)), global_step)
+                if global_step % 1000 == 0:
+                    writer.add_scalar("losses/qf1_values", qf1_a_values.mean().item(), global_step)
+                    writer.add_scalar("losses/qf1_loss", qf1_loss.item(), global_step)
+                    writer.add_scalar("losses/actor_loss", actor_loss.item(), global_step)
+                    # print("SPS:", int(global_step / (time.time() - start_time)))
+                    writer.add_scalar("charts/SPS", int(global_step / (time.time() - start_time)), global_step)
 
         if global_step % args.eval_freq == 0:
             evaluator.evaluate(global_step, num_updates=num_updates)
