@@ -31,14 +31,16 @@ class Evaluator:
         self.eval_returns = []
         self.eval_timesteps = []
         self.eval_successes = []
+        self.eval_epochs = []
         self.eval_updates = []
 
-    def evaluate(self, timestep, num_updates):
+    def evaluate(self, timestep, num_epochs, num_updates):
         returns, successes = self._evaluate()
 
         self.eval_timesteps.append(timestep)
         self.eval_returns.append(returns)
         self.eval_successes.append(successes)
+        self.eval_epochs.append(num_epochs)
         self.eval_updates.append(num_updates)
 
         np.savez(
@@ -46,6 +48,7 @@ class Evaluator:
             timesteps=self.eval_timesteps,
             returns=self.eval_returns,
             successes=self.eval_successes,
+            epochs=self.eval_epochs,
             updates=self.eval_updates,
         )
 

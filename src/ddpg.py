@@ -79,7 +79,7 @@ class Args:
     def __post_init__(self):
         if self.eval_freq == None: 
             # 20 evals per training run unless specified otherwise.
-            self.eval_freq = self.total_timesteps/20
+            self.eval_freq = self.total_timesteps//20
 
         if self.save_subdir == None:
             self.save_dir = f"{self.save_rootdir}/{self.env_id}/ddpg"
@@ -279,6 +279,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
     evaluator = Evaluator(actor, eval_env, args.save_dir, n_eval_episodes=args.n_eval_episodes)
 
     start_time = time.time()
+    num_epochs = 0
     num_updates = 0
 
     # TRY NOT TO MODIFY: start the game
@@ -322,6 +323,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
 
         # ALGO LOGIC: training.
         if global_step > args.learning_starts and global_step % args.train_freq == 0:
+            num_epochs += 1
             for i in range(args.updates_per_step):
                 num_updates += 1
                 # For a given alpha \in [0, 1] sample (1-alpha)*batch_size samples from the observed replay buffer and
@@ -372,7 +374,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                     writer.add_scalar("charts/SPS", int(global_step / (time.time() - start_time)), global_step)
 
         if global_step % args.eval_freq == 0:
-            evaluator.evaluate(global_step, num_updates=num_updates)
+            evaluator.evaluate(global_step, num_epochs=num_epochs, num_updates=num_updates)
 
 
     if args.save_model:
