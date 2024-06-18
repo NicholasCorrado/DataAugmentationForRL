@@ -2,7 +2,7 @@
 import os
 import random
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import gymnasium as gym
 import numpy as np
@@ -14,6 +14,10 @@ import tyro
 from stable_baselines3.common.buffers import ReplayBuffer
 from torch.utils.tensorboard import SummaryWriter
 
+from typing import Optional, Union
+from src.utils import get_latest_run_id
+from src.evaluator import Evaluator
+import yaml
 
 @dataclass
 class Args:
@@ -23,11 +27,17 @@ class Args:
     cuda: bool = True # cuda will be enabled by default
     track: bool = False # if toggled,  experiment will be tracked with Weights and Biases
     wandb_project_name: str = "cleanRL"
-    wandb_entity: str = None # entity (team) of wandb's project
+    wandb_entity: Optional[str] = None # the entity (team) of wandb's project
     capture_video: bool = False # capture videos of the agent performances (check out `videos` folder)
     save_model: bool = False # whether to save model into the `runs/{run_name}` folder
     upload_model: bool = False # upload the saved model to huggingface
     hf_entity: str = "" # user or org name of the model repository from the Hugging Face Hub
+
+    run_id: Optional[int] = None
+    save_rootdir: str = "results"           # top-level directory where results will be saved
+    save_subdir: Optional[str] = None       # lower level directories
+    save_dir: str = field(init=False)       # the lower-level directories 
+    save_model: bool = False # whether to save model into the `runs/{run_name}` folder
 
     # Algorithm specific arguments
     env_id: str = "Hopper-v4" # the id of the environment
@@ -42,6 +52,31 @@ class Args:
     learning_starts: int = 25e3 # timestep to start learning
     policy_frequency: int = 2 # the frequency of training policy (delayed
     noise_clip: float = 0.5 # noise clip parameter of the Target Policy Smoothing Regularization
+
+
+    def __post_init__(self):
+        # if self.eval_freq == None: 
+        #     # 20 evals per training run unless specified otherwise.
+        #     self.eval_freq = self.total_timesteps/20
+
+        if self.save_subdir == None:
+            self.save_dir = f"{self.save_rootdir}/{self.env_id}/td3"
+        else:
+            self.save_dir = f"{self.save_rootdir}/{self.env_id}/td3/{self.save_subdir}"
+        if self.run_id is None:
+            self.run_id = get_latest_run_id(save_dir=self.save_dir) + 1
+        self.save_dir += f"/run_{self.run_id}"
+        if self.seed is None:
+            self.seed = self.run_id
+        else:
+            self.seed = np.random.randint(2 ** 32 - 1)
+
+        print("self.save_dir = "+self.save_dir)
+
+        # dump training config to save dir
+        os.makedirs(self.save_dir, exist_ok=True)
+        with open(os.path.join(self.save_dir, "config.yml"), "w") as f:
+            yaml.dump(self, f, sort_keys=True)
 
 
 def make_env(env_id, seed, idx, capture_video, run_name):
@@ -62,6 +97,9 @@ def make_env(env_id, seed, idx, capture_video, run_name):
 class QNetwork(nn.Module):
     def __init__(self, env):
         super().__init__()
+        print("QNET env.single_observation_space.shape")
+        print(env.single_observation_space.shape)
+
         self.fc1 = nn.Linear(np.array(env.single_observation_space.shape).prod() + np.prod(env.single_action_space.shape), 256)
         self.fc2 = nn.Linear(256, 256)
         self.fc3 = nn.Linear(256, 1)
@@ -77,6 +115,8 @@ class QNetwork(nn.Module):
 class Actor(nn.Module):
     def __init__(self, env):
         super().__init__()
+        print("env.single_observation_space.shape")
+        print(env.single_observation_space.shape)
         self.fc1 = nn.Linear(np.array(env.single_observation_space.shape).prod(), 256)
         self.fc2 = nn.Linear(256, 256)
         self.fc_mu = nn.Linear(256, np.prod(env.single_action_space.shape))
@@ -92,7 +132,7 @@ class Actor(nn.Module):
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
         x = torch.tanh(self.fc_mu(x))
-        return x * self.action_scale + self.action_bias
+        return x * self.action_scale + self.action_bias, None
 
 
 if __name__ == "__main__":
@@ -167,7 +207,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
             actions = np.array([envs.single_action_space.sample() for _ in range(envs.num_envs)])
         else:
             with torch.no_grad():
-                actions = actor(torch.Tensor(obs).to(device))
+                actions, _ = actor(torch.Tensor(obs).to(device))
                 actions += torch.normal(0, actor.action_scale * args.exploration_noise)
                 actions = actions.cpu().numpy().clip(envs.single_action_space.low, envs.single_action_space.high)
 

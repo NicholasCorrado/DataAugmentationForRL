@@ -257,11 +257,6 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         else:
             actions, _, _ = actor.get_action(torch.Tensor(obs).to(device)) 
             actions = actions.detach().cpu().numpy()
-            ###### copied from ddpg
-            # with torch.no_grad():
-            #     actions = actor(torch.Tensor(obs).to(device))
-            #     actions += torch.normal(0, actor.action_scale * args.exploration_noise)
-            #     actions = actions.cpu().numpy().clip(envs.single_action_space.low, envs.single_action_space.high)
 
 
         # TRY NOT TO MODIFY: execute the game and log data.

@@ -71,7 +71,7 @@ class Evaluator:
             while not done:
                 # ALGO LOGIC: put action logic here
                 with torch.no_grad():
-                    actions = self.actor(torch.Tensor(obs).to(self.device))
+                    actions, _ = self.actor(torch.Tensor(obs).to(self.device))
                     actions = actions.cpu().numpy().clip(self.eval_env.action_space.low,
                                                          self.eval_env.action_space.high)
 

@@ -188,13 +188,13 @@ class Actor(nn.Module):
             x = F.relu(self.fc1(x))
             x = F.relu(self.fc2(x))
             x = torch.tanh(self.fc_mu(x))
-            return x * self.action_scale + self.action_bias
+            return x * self.action_scale + self.action_bias, None
         elif self.dims == 3: 
             x = F.relu(self.fc1(x))
             x = F.relu(self.fc2(x))
             x = F.relu(self.fc3(x))
             x = torch.tanh(self.fc_mu(x))
-            return x * self.action_scale + self.action_bias
+            return x * self.action_scale + self.action_bias, None
 
 
 if __name__ == "__main__":
@@ -289,7 +289,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
             actions = np.array([envs.single_action_space.sample() for _ in range(envs.num_envs)])
         else:
             with torch.no_grad():
-                actions = actor(torch.Tensor(obs).to(device))
+                actions, _ = actor(torch.Tensor(obs).to(device))
                 actions += torch.normal(0, actor.action_scale * args.exploration_noise)
                 actions = actions.cpu().numpy().clip(envs.single_action_space.low, envs.single_action_space.high)
 
