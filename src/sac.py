@@ -245,8 +245,8 @@ poetry run pip install "stable_baselines3==2.0.0a1"
     eval_env = gym.vector.SyncVectorEnv([make_env(args.env_id, args.env_kwargs, 0, 0, False, run_name)])
     evaluator = Evaluator(actor, eval_env, args.save_dir, n_eval_episodes=args.n_eval_episodes)
 
-    start_time = time.time()
     num_updates = 0
+    start_time = time.time()
 
     # TRY NOT TO MODIFY: start the game
     obs, _ = envs.reset(seed=args.seed)
