@@ -2,7 +2,7 @@
 import os
 import random
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import gymnasium as gym
 import numpy as np
@@ -14,6 +14,10 @@ import tyro
 from stable_baselines3.common.buffers import ReplayBuffer
 from torch.utils.tensorboard import SummaryWriter
 
+from typing import Optional, Union
+from src.utils import get_latest_run_id
+from src.evaluator import Evaluator
+import yaml
 
 @dataclass
 class Args:
@@ -23,13 +27,26 @@ class Args:
     cuda: bool = True # cuda will be enabled by default
     track: bool = False # if toggled,  experiment will be tracked with Weights and Biases
     wandb_project_name: str = "cleanRL"
-    wandb_entity: str = None # entity (team) of wandb's project
+    wandb_entity: Optional[str] = None # the entity (team) of wandb's project
     capture_video: bool = False # capture videos of the agent performances (check out `videos` folder)
     save_model: bool = False # whether to save model into the `runs/{run_name}` folder
     upload_model: bool = False # upload the saved model to huggingface
     hf_entity: str = "" # user or org name of the model repository from the Hugging Face Hub
 
+    run_id: Optional[int] = None
+    save_rootdir: str = "results"           # top-level directory where results will be saved
+    save_subdir: Optional[str] = None       # lower level directories
+    save_dir: str = field(init=False)       # the lower-level directories 
+    save_model: bool = False # whether to save model into the `runs/{run_name}` folder
+
     # Algorithm specific arguments
+    env_kwargs: dict[str, Union[bool, float, str]] = field(default_factory=dict) 
+    """
+    usage: --env_kwargs arg1 val1 arg2 val2 arg3 val3
+    
+    To make PointMaze tasks use a sparse reward function:
+        --env_kwargs continuing_task False
+    """
     env_id: str = "Hopper-v4" # the id of the environment
     total_timesteps: int = 1000000 # total timesteps of the experiments
     learning_rate: float = 3e-4 # learning rate of the optimizer
@@ -42,21 +59,51 @@ class Args:
     learning_starts: int = 25e3 # timestep to start learning
     policy_frequency: int = 2 # the frequency of training policy (delayed
     noise_clip: float = 0.5 # noise clip parameter of the Target Policy Smoothing Regularization
+    eval_freq: Optional[int] = None         # num of timesteps between policy evals
+    n_eval_episodes: int = 80               # num of eval episodes
 
 
-def make_env(env_id, seed, idx, capture_video, run_name):
+    def __post_init__(self):
+        if self.eval_freq == None: 
+            # 20 evals per training run unless specified otherwise.
+            self.eval_freq = self.total_timesteps/20
+
+        if self.save_subdir == None:
+            self.save_dir = f"{self.save_rootdir}/{self.env_id}/td3"
+        else:
+            self.save_dir = f"{self.save_rootdir}/{self.env_id}/td3/{self.save_subdir}"
+        if self.run_id is None:
+            self.run_id = get_latest_run_id(save_dir=self.save_dir) + 1
+        self.save_dir += f"/run_{self.run_id}"
+        if self.seed is None:
+            self.seed = self.run_id
+        else:
+            self.seed = np.random.randint(2 ** 32 - 1)
+
+        print("self.save_dir = "+self.save_dir)
+
+        # dump training config to save dir
+        os.makedirs(self.save_dir, exist_ok=True)
+        with open(os.path.join(self.save_dir, "config.yml"), "w") as f:
+            yaml.dump(self, f, sort_keys=True)
+
+
+def make_env(env_id, env_kwargs, seed, idx, capture_video, run_name):
     def thunk():
         if capture_video and idx == 0:
-            env = gym.make(env_id, render_mode="rgb_array")
+            env = gym.make(env_id, render_mode="rgb_array", **env_kwargs)
             env = gym.wrappers.RecordVideo(env, f"videos/{run_name}")
         else:
-            env = gym.make(env_id)
+            env = gym.make(env_id, **env_kwargs)
+
+        # Flatten Dict obs so we don't need to handle them a special case in DA
+        if isinstance(env.observation_space, gym.spaces.Dict):
+            env = gym.wrappers.FlattenObservation(env)
         env = gym.wrappers.RecordEpisodeStatistics(env)
         env.action_space.seed(seed)
         return env
 
     return thunk
-
 
 # ALGO LOGIC: initialize agent here:
 class QNetwork(nn.Module):
@@ -92,7 +139,7 @@ class Actor(nn.Module):
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
         x = torch.tanh(self.fc_mu(x))
-        return x * self.action_scale + self.action_bias
+        return x * self.action_scale + self.action_bias, None
 
 
 if __name__ == "__main__":
@@ -131,10 +178,11 @@ poetry run pip install "stable_baselines3==2.0.0a1"
     torch.manual_seed(args.seed)
     torch.backends.cudnn.deterministic = args.torch_deterministic
 
-    device = torch.device("cuda" if torch.cuda.is_available() and args.cuda else "cpu")
+    # device = torch.device("cuda" if torch.cuda.is_available() and args.cuda else "cpu")
+    device = torch.device("cpu")
 
     # env setup
-    envs = gym.vector.SyncVectorEnv([make_env(args.env_id, args.seed, 0, args.capture_video, run_name)])
+    envs = gym.vector.SyncVectorEnv([make_env(args.env_id, args.env_kwargs, args.seed, 0, args.capture_video, run_name)])
     assert isinstance(envs.single_action_space, gym.spaces.Box), "only continuous action space is supported"
 
     actor = Actor(envs).to(device)
@@ -157,6 +205,11 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         device,
         handle_timeout_termination=False,
     )
+    
+    eval_env = gym.vector.SyncVectorEnv([make_env(args.env_id, args.env_kwargs, 0, 0, False, run_name)])
+    evaluator = Evaluator(actor, eval_env, args.save_dir, n_eval_episodes=args.n_eval_episodes)
+
+    num_updates = 0
     start_time = time.time()
 
     # TRY NOT TO MODIFY: start the game
@@ -167,7 +220,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
             actions = np.array([envs.single_action_space.sample() for _ in range(envs.num_envs)])
         else:
             with torch.no_grad():
-                actions = actor(torch.Tensor(obs).to(device))
+                actions, _ = actor(torch.Tensor(obs).to(device))
                 actions += torch.normal(0, actor.action_scale * args.exploration_noise)
                 actions = actions.cpu().numpy().clip(envs.single_action_space.low, envs.single_action_space.high)
 
@@ -177,7 +230,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         # TRY NOT TO MODIFY: record rewards for plotting purposes
         if "final_info" in infos:
             for info in infos["final_info"]:
-                print(f"global_step={global_step}, episodic_return={info['episode']['r']}")
+                # print(f"global_step={global_step}, episodic_return={info['episode']['r']}")
                 writer.add_scalar("charts/episodic_return", info["episode"]["r"], global_step)
                 writer.add_scalar("charts/episodic_length", info["episode"]["l"], global_step)
                 break
@@ -240,8 +293,12 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 writer.add_scalar("losses/qf2_loss", qf2_loss.item(), global_step)
                 writer.add_scalar("losses/qf_loss", qf_loss.item() / 2.0, global_step)
                 writer.add_scalar("losses/actor_loss", actor_loss.item(), global_step)
-                print("SPS:", int(global_step / (time.time() - start_time)))
+                # print("SPS:", int(global_step / (time.time() - start_time)))
                 writer.add_scalar("charts/SPS", int(global_step / (time.time() - start_time)), global_step)
+
+        if global_step % args.eval_freq == 0:
+            evaluator.evaluate(global_step, num_updates=num_updates)
+
 
     if args.save_model:
         model_path = f"runs/{run_name}/{args.exp_name}.cleanrl_model"
@@ -264,7 +321,6 @@ poetry run pip install "stable_baselines3==2.0.0a1"
 
         if args.upload_model:
             from cleanrl_utils.huggingface import push_to_hub
-
             repo_name = f"{args.env_id}-{args.exp_name}-seed{args.seed}"
             repo_id = f"{args.hf_entity}/{repo_name}" if args.hf_entity else repo_name
             push_to_hub(args, episodic_returns, repo_id, "TD3", f"runs/{run_name}", f"videos/{run_name}-eval")

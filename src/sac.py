@@ -23,7 +23,8 @@ import yaml
 class Args:
     # wandb tracking
     exp_name: str = os.path.basename(__file__)[: -len(".py")] # name of this experiment
-    seed: int = 1
+    seed: Optional[int] = None       # seed of the experiment
+    # seed: int = 1
     torch_deterministic: bool = True # if toggled, torch.backends.cudnn.deterministic=False
     cuda: bool = True
     track: bool = False # tracked with Weights and Biases
@@ -60,33 +61,47 @@ class Args:
     save_rootdir: str = "results"           # top-level directory where results will be saved
     save_subdir: Optional[str] = None       # lower level directories
     save_dir: str = field(init=False)       # the lower-level directories 
+    save_model: bool = False                # whether to save model into the `runs/{run_name}` folder
+    eval_freq: Optional[int] = None         # num of timesteps between policy evals
+    n_eval_episodes: int = 80               # num of eval episodes
 
-def __post_init__(self):
-    if self.save_subdir == None:
-        self.save_dir = f"{self.save_rootdir}/{self.env_id}/ddpg"
-    else:
-        self.save_dir = f"{self.save_rootdir}/{self.env_id}/ddpg/{self.save_subdir}"
-    if self.run_id is None:
-        self.run_id = get_latest_run_id(save_dir=self.save_dir) + 1
-    self.save_dir += f"/run_{self.run_id}"
-    if self.seed is None:
-        self.seed = self.run_id
-    else:
-        self.seed = np.random.randint(2 ** 32 - 1)
+    def __post_init__(self):
+        if self.eval_freq == None: 
+            # 20 evals per training run unless specified otherwise.
+            self.eval_freq = self.total_timesteps/20
 
-    # dump training config to save dir
-    os.makedirs(self.save_dir, exist_ok=True)
-    with open(os.path.join(self.save_dir, "config.yml"), "w") as f:
-        yaml.dump(self, f, sort_keys=True)
+        if self.save_subdir == None:
+            self.save_dir = f"{self.save_rootdir}/{self.env_id}/sac"
+        else:
+            self.save_dir = f"{self.save_rootdir}/{self.env_id}/sac/{self.save_subdir}"
+        if self.run_id is None:
+            self.run_id = get_latest_run_id(save_dir=self.save_dir) + 1
+        self.save_dir += f"/run_{self.run_id}"
+        if self.seed is None:
+            self.seed = self.run_id
+        else:
+            self.seed = np.random.randint(2 ** 32 - 1)
+
+        print("self.save_dir = "+self.save_dir)
+
+        # dump training config to save dir
+        os.makedirs(self.save_dir, exist_ok=True)
+        with open(os.path.join(self.save_dir, "config.yml"), "w") as f:
+            yaml.dump(self, f, sort_keys=True)
 
 
-def make_env(env_id, seed, idx, capture_video, run_name):
+## added env_kwargs from ddpg.py
+def make_env(env_id, env_kwargs, seed, idx, capture_video, run_name):
     def thunk():
         if capture_video and idx == 0:
-            env = gym.make(env_id, render_mode="rgb_array")
+            env = gym.make(env_id, render_mode="rgb_array", **env_kwargs)
             env = gym.wrappers.RecordVideo(env, f"videos/{run_name}")
         else:
-            env = gym.make(env_id)
+            env = gym.make(env_id, **env_kwargs)
+
+        # Flatten Dict obs so we don't need to handle them a special case in DA
+        if isinstance(env.observation_space, gym.spaces.Dict):
+            env = gym.wrappers.FlattenObservation(env)
         env = gym.wrappers.RecordEpisodeStatistics(env)
         env.action_space.seed(seed)
         return env
@@ -190,10 +205,11 @@ poetry run pip install "stable_baselines3==2.0.0a1"
     torch.manual_seed(args.seed)
     torch.backends.cudnn.deterministic = args.torch_deterministic
 
-    device = torch.device("cuda" if torch.cuda.is_available() and args.cuda else "cpu")
+    # device = torch.device("cuda" if torch.cuda.is_available() and args.cuda else "cpu")
+    device = torch.device("cpu")
 
     # env setup
-    envs = gym.vector.SyncVectorEnv([make_env(args.env_id, args.seed, 0, args.capture_video, run_name)])
+    envs = gym.vector.SyncVectorEnv([make_env(args.env_id, args.env_kwargs, args.seed, 0, args.capture_video, run_name)])
     assert isinstance(envs.single_action_space, gym.spaces.Box), "only continuous action space is supported"
 
     max_action = float(envs.single_action_space.high[0])
@@ -226,11 +242,11 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         handle_timeout_termination=False,
     )
     
-    # eval_env = gym.vector.SyncVectorEnv([make_env(args.env_id, 0, 0, False, run_name)])
-    # evaluator = Evaluator(actor, eval_env, args.save_dir, n_eval_episodes=args.n_eval_episodes)
+    eval_env = gym.vector.SyncVectorEnv([make_env(args.env_id, args.env_kwargs, 0, 0, False, run_name)])
+    evaluator = Evaluator(actor, eval_env, args.save_dir, n_eval_episodes=args.n_eval_episodes)
 
-    start_time = time.time()
     num_updates = 0
+    start_time = time.time()
 
     # TRY NOT TO MODIFY: start the game
     obs, _ = envs.reset(seed=args.seed)
@@ -239,8 +255,9 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         if global_step < args.learning_starts:
             actions = np.array([envs.single_action_space.sample() for _ in range(envs.num_envs)])
         else:
-            actions, _, _ = actor.get_action(torch.Tensor(obs).to(device))
+            actions, _, _ = actor.get_action(torch.Tensor(obs).to(device)) 
             actions = actions.detach().cpu().numpy()
+
 
         # TRY NOT TO MODIFY: execute the game and log data.
         next_obs, rewards, terminations, truncations, infos = envs.step(actions)
@@ -329,8 +346,15 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 if args.autotune:
                     writer.add_scalar("losses/alpha_loss", alpha_loss.item(), global_step)
 
-        # if global_step % args.eval_freq == 0:
-        #     evaluator.evaluate(global_step, num_updates=num_updates)
+        if global_step % args.eval_freq == 0:
+            evaluator.evaluate(global_step, num_updates=num_updates)
+
+
+    if args.save_model:
+        model_path = f"{args.save_dir}/model"
+        torch.save((actor.state_dict(), qf1.state_dict()), model_path)
+        print(f"model saved to {model_path}")
+
 
     envs.close()
     writer.close()
