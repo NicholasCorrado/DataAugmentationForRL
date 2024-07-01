@@ -55,7 +55,8 @@ class Args:
     save_model: bool = False # whether to save model into the `runs/{run_name}` folder
 
     # Algorithm specific arguments
-    net_arch: list[int] = (256, 256, 256)  # Structure of the network, default 64,64
+    actor_net_arch: list[int] = (64,64)  # Structure of actor network, default 64,64
+    critic_net_arch: list[int] = (64,64)  # Structure of critic network, default 64,64
     learning_rate: float = 1e-3     # learning rate of optimizer
     buffer_size: int = int(1e6)     # replay memory buffer size
     gamma: float = 0.99             # discount factor gamma
@@ -123,13 +124,12 @@ class QNetwork(nn.Module):
     def __init__(self, env):
         super().__init__()
         valid_networks = [(64, 64), (256,256), (256,256,256), [64,64], [256,256], [256,256,256]]
-        if args.net_arch in valid_networks:
-            arch = np.array(args.net_arch)
+        if args.critic_net_arch in valid_networks:
+            arch = np.array(args.critic_net_arch)
         else: # invalid architecture    
             print("Exiting: incorrect network architecture. example: ")
             print("--net_arch 256 256 256")
             exit()
-        
         self.dims = len(arch)
         if self.dims == 2: # 64,64 or 256,256
             self.fc1 = nn.Linear(np.array(env.single_observation_space.shape).prod() + np.prod(env.single_action_space.shape), \
@@ -163,7 +163,13 @@ class QNetwork(nn.Module):
 class Actor(nn.Module):
     def __init__(self, env):
         super().__init__()
-        arch = np.array(args.net_arch)
+        valid_networks = [(64, 64), (256,256), (256,256,256), [64,64], [256,256], [256,256,256]]
+        if args.actor_net_arch in valid_networks:
+            arch = np.array(args.actor_net_arch)
+        else: # invalid architecture    
+            print("Exiting: incorrect network architecture. example: ")
+            print("--net_arch 256 256 256")
+            exit()
         self.dims = len(arch)
         if self.dims == 2: # 64,64 or 256,256
             self.fc1 = nn.Linear(np.array(env.single_observation_space.shape).prod(), arch[0])

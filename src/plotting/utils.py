@@ -142,7 +142,7 @@ def get_paths(results_dir, filename='evaluations.npz'):
             paths.append(f'{results_dir}/{subdir}/{filename}')
     return paths
 
-
+# TODO: Add addit. arg to choose timesteps or updates
 def get_data(results_dir, field_name='returns', filename='evaluations.npz'):
 
     try:
@@ -164,6 +164,6 @@ def get_data(results_dir, field_name='returns', filename='evaluations.npz'):
                 avg_vals = vals
 
             results.append(avg_vals)
-            timesteps = data['timesteps']
+            timesteps = data['timesteps']  ####
 
     return timesteps, np.array(results)
