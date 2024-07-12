@@ -143,7 +143,7 @@ def get_paths(results_dir, filename='evaluations.npz'):
     return paths
 
 
-def get_data(results_dir, field_name='returns', filename='evaluations.npz'):
+def get_data(results_dir, field_name='returns', y_axis='updates', filename='evaluations.npz'):
 
     try:
         paths = get_paths(results_dir, filename)
@@ -151,7 +151,7 @@ def get_data(results_dir, field_name='returns', filename='evaluations.npz'):
         warnings.warn(f'Data not found at path {results_dir}')
         paths = []
 
-    timesteps = None
+    y = None
     results = []
     for path in paths:
 
@@ -164,6 +164,8 @@ def get_data(results_dir, field_name='returns', filename='evaluations.npz'):
                 avg_vals = vals
 
             results.append(avg_vals)
-            timesteps = data['timesteps']
+            
+            # y_axis = timesteps or updates
+            y = data[y_axis]
 
-    return timesteps, np.array(results)
+    return y, np.array(results)
